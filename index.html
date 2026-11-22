@@ -2629,6 +2629,12 @@ Grazie per averci seguito, appuntamento alla prossima puntata.`
 
         // 1. MTC Quarter Frame (0xF1 <data>)
         if (status === 0xF1 && data.length >= 2) {
+          const nowMtcWallMs = performance.now();
+          const wasMtcIdle = !simPlaying && (lastMtcActivityMs === 0 || (nowMtcWallMs - lastMtcActivityMs) > 650);
+          if (wasMtcIdle && isAnyOverlayOpen()) {
+            closeAllPanelsForReading({ keepSimPanel: false });
+          }
+
           const val = data[1];
           const piece = (val >> 4) & 0x07;
           const nibble = val & 0x0F;
@@ -3117,6 +3123,7 @@ Grazie per averci seguito, appuntamento alla prossima puntata.`
 
       function startAutoScroll() {
         if (state.syncMode !== 'AUTO') return;
+        closeAllPanelsForReading({ keepSimPanel: false });
         if (maxScrollY > 0 && currentScrollY >= maxScrollY - 0.5) {
           targetScrollY = 0;
           currentScrollY = 0;
@@ -3298,6 +3305,7 @@ Grazie per averci seguito, appuntamento alla prossima puntata.`
       }
 
       function startSimulator() {
+        closeAllPanelsForReading({ keepSimPanel: true });
         const bounds = getSimBounds();
         if (simCurrentSec >= bounds.maxSec) {
           simCurrentSec = bounds.minSec;
@@ -3323,6 +3331,43 @@ Grazie per averci seguito, appuntamento alla prossima puntata.`
           cueSidebar.classList.contains('is-open') ||
           setlistDrawer.classList.contains('is-open')
         );
+      }
+
+      function closeAllPanelsForReading(options) {
+        const opts = options || {};
+        learningSwitchId = null;
+
+        if (editorModal.classList.contains('is-open')) {
+          editorModal.classList.remove('is-open');
+        }
+        if (helpModal.classList.contains('is-open')) {
+          helpModal.classList.remove('is-open');
+        }
+        if (pedalModal.classList.contains('is-open')) {
+          pedalModal.classList.remove('is-open');
+        }
+        if (cueSidebar.classList.contains('is-open')) {
+          cueSidebar.classList.remove('is-open');
+          cueSidebarBackdrop.classList.remove('is-open');
+          btnCueSidebar.classList.remove('is-active');
+        }
+        if (setlistDrawer.classList.contains('is-open')) {
+          setlistDrawer.classList.remove('is-open');
+          setlistDrawerBackdrop.classList.remove('is-open');
+          btnSetlistDrawer.classList.remove('is-active');
+          closeSongForm();
+          setlistNameForm.classList.add('hidden');
+        }
+        if (!opts.keepSimPanel && simPanel.classList.contains('is-open')) {
+          simPanel.classList.remove('is-open');
+          btnSimToggle.classList.remove('is-active');
+        }
+
+        const activeEl = document.activeElement;
+        if (activeEl && activeEl !== document.body && typeof activeEl.blur === 'function') {
+          activeEl.blur();
+        }
+        scheduleAutoHide();
       }
 
       function showHud() {
@@ -3553,13 +3598,7 @@ Grazie per averci seguito, appuntamento alla prossima puntata.`
       }
 
       function isPedalExecutionBlocked() {
-        return (
-          learningSwitchId !== null ||
-          isTextEditingActive() ||
-          editorModal.classList.contains('is-open') ||
-          helpModal.classList.contains('is-open') ||
-          pedalModal.classList.contains('is-open')
-        );
+        return learningSwitchId !== null || isTextEditingActive();
       }
 
       function isLiveNuendoMtcRunning() {
@@ -3931,20 +3970,29 @@ Grazie per averci seguito, appuntamento alla prossima puntata.`
           return;
         }
 
-        // 2. Safety Guard: disable pedal HID commands while typing/editing text or modals are open
+        // 2. Safety Guard: disable pedal HID commands while typing/editing text or learning keys
         if (isPedalExecutionBlocked()) return;
 
-        // 3. Match Left or Right Switch
+        // 3. Match Left or Right Switch (fallback to Spacebar Play/Pause if unmapped)
+        let matchedSwitch = false;
         for (let i = 0; i < PEDAL_SWITCHES.length; i++) {
           const sw = PEDAL_SWITCHES[i];
           const binding = pedalConfig.bindings[sw.id];
           if (doesKeyMatchBinding(e, binding)) {
+            matchedSwitch = true;
             e.preventDefault();
             if (!e.repeat) {
               setPedalSignalDebug(binding.label);
               onSwitchDown(sw.id, true);
             }
             break;
+          }
+        }
+        if (!matchedSwitch && !e.repeat && (e.code === 'Space' || e.key === ' ')) {
+          const activeTag = document.activeElement ? document.activeElement.tagName : '';
+          if (activeTag !== 'BUTTON' && activeTag !== 'A') {
+            e.preventDefault();
+            executePedalPlayPause();
           }
         }
       }, true);
@@ -4068,7 +4116,7 @@ Grazie per averci seguito, appuntamento alla prossima puntata.`
           return;
         }
 
-        // 2. Safety Guard: disable pedal commands while editing text or modal is open
+        // 2. Safety Guard: disable pedal commands while editing text or learning keys
         if (isPedalExecutionBlocked()) return;
 
         // 3. Match Left or Right Switch
@@ -4549,11 +4597,7 @@ Grazie per averci seguito, appuntamento alla prossima puntata.`
               syncMode: 'A',
               startTC: '01:01:00:00',
               endTC: '01:04:00:00',
-              scriptText: `Questa sera il palco si illumina con un nuovo viaggio musicale.
-
-Seguite il respiro della sezione ritmica e tenete lo sguardo sulla linea rossa centrale.
-
-Sul ritornello apriamo al pubblico in sala e lasciamo spazio al solo finale.`
+              scriptText: `Questa sera il palco si illumina con un nuovo viaggio musicale.\n\nSeguite il respiro della sezione ritmica e tenete lo sguardo sulla linea rossa centrale.\n\nSul ritornello apriamo al pubblico in sala e lasciamo spazio al solo finale.`
             },
             {
               id: 'song-tour-3',
@@ -4561,14 +4605,7 @@ Sul ritornello apriamo al pubblico in sala e lasciamo spazio al solo finale.`
               syncMode: 'B',
               startTC: '01:05:00:00',
               endTC: '01:06:15:00',
-              scriptText: `[01:05:00:00] ATTACCO FINALE
-Grazie a tutta la città per essere stata con noi questa sera!
-
-[01:05:25:00] PRESENTAZIONE BAND
-Un applauso ai musicisti sul palco e alla squadra tecnica in regia.
-
-[01:05:50:00] SALUTO CONCLUSIVO
-Buonanotte e alla prossima tappa del tour!`
+              scriptText: `[01:05:00:00] ATTACCO FINALE\nGrazie a tutta la città per essere stata con noi questa sera!\n\n[01:05:25:00] PRESENTAZIONE BAND\nUn applauso ai musicisti sul palco e alla squadra tecnica in regia.\n\n[01:05:50:00] SALUTO CONCLUSIVO\nBuonanotte e alla prossima tappa del tour!`
             }
           ]
         };
@@ -4583,11 +4620,7 @@ Buonanotte e alla prossima tappa del tour!`
               syncMode: 'B',
               startTC: '01:00:00:00',
               endTC: '01:00:35:00',
-              scriptText: `[01:00:00:00] NARRATORE (F.C.)
-Era una notte silenziosa quando le luci dello studio si accesero una ad una.
-
-[01:00:15:00] MARCO
-Non c'è più tempo da perdere, dobbiamo avviare la registrazione ora.`
+              scriptText: `[01:00:00:00] NARRATORE (F.C.)\nEra una notte silenziosa quando le luci dello studio si accesero una ad una.\n\n[01:00:15:00] MARCO\nNon c'è più tempo da perdere, dobbiamo avviare la registrazione ora.`
             },
             {
               id: 'song-dub-2',
@@ -4595,11 +4628,7 @@ Non c'è più tempo da perdere, dobbiamo avviare la registrazione ora.`
               syncMode: 'B',
               startTC: '01:02:00:00',
               endTC: '01:02:40:00',
-              scriptText: `[01:02:00:00] ELENA
-Timecode agganciato. Siamo perfettamente in sincrono con Nuendo.
-
-[01:02:20:00] MARCO
-Perfetto, buona la prima!`
+              scriptText: `[01:02:00:00] ELENA\nTimecode agganciato. Siamo perfettamente in sincrono con Nuendo.\n\n[01:02:20:00] MARCO\nPerfetto, buona la prima!`
             }
           ]
         };
@@ -4614,9 +4643,7 @@ Perfetto, buona la prima!`
               syncMode: 'A',
               startTC: '01:00:00:00',
               endTC: '01:01:30:00',
-              scriptText: `Test di scorrimento lineare tra Start TC e End TC.
-
-Verifica dimensioni font, margini laterali e ribaltamento specchio prima della registrazione ufficiale.`
+              scriptText: `Test di scorrimento lineare tra Start TC e End TC.\n\nVerifica dimensioni font, margini laterali e ribaltamento specchio prima della registrazione ufficiale.`
             }
           ]
         };
@@ -5358,9 +5385,14 @@ Verifica dimensioni font, margini laterali e ribaltamento specchio prima della r
         updatePedalMidiBanner();
 
         const activeSl = getActiveSetlist();
-        const activeSong = activeSl && (activeSl.songs.find((s) => s.id === setlistStore.activeSongId) || activeSl.songs[0]);
-        if (activeSong && !localStorage.getItem(STORAGE_KEY)) {
+        const activeSong = activeSl && (
+          activeSl.songs.find((s) => s.id === setlistStore.activeSongId) ||
+          activeSl.songs.find((s) => String(s.scriptText || '').trim().length > 0) ||
+          activeSl.songs[0]
+        );
+        if (activeSong) {
           loadSong(activeSong, { preserveCurrentTime: false });
+          updateFpsReadout();
         } else {
           const startSec = tcStrToSeconds(state.startTC, getEffectiveFpsMode()) ?? 3600;
           currentTimeSec = startSec;
