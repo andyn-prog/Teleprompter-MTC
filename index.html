@@ -1,0 +1,5390 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>MTC Teleprompter Studio</title>
+  <meta name="description" content="Teleprompter professionale per tablet Android sincronizzato con Steinberg Nuendo tramite MIDI Timecode (MTC) via USB." />
+  <meta property="og:title" content="MTC Teleprompter Studio" />
+  <meta property="og:description" content="Teleprompter professionale per tablet Android sincronizzato con Steinberg Nuendo tramite MIDI Timecode (MTC) via USB." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Teleprompter" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <style>
+    :root {
+      --bg-stage: #000000;
+      --bg-panel: rgba(16, 18, 22, 0.94);
+      --bg-surface: #181b21;
+      --bg-surface-hover: #22262f;
+      --border-subtle: rgba(255, 255, 255, 0.12);
+      --border-strong: rgba(255, 255, 255, 0.24);
+      --text-primary: #ffffff;
+      --text-secondary: #a1a8b5;
+      --text-muted: #6e7684;
+      --accent-red: #ef4444;
+      --accent-blue: #3b82f6;
+      --accent-green: #22c55e;
+      --accent-amber: #f59e0b;
+      --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+    }
+
+    body.inverted-colors {
+      --bg-stage: #ffffff;
+      --bg-panel: rgba(244, 246, 249, 0.95);
+      --bg-surface: #e7ebf0;
+      --bg-surface-hover: #d8dfe7;
+      --border-subtle: rgba(15, 23, 42, 0.16);
+      --border-strong: rgba(15, 23, 42, 0.3);
+      --text-primary: #000000;
+      --text-secondary: #334155;
+      --text-muted: #64748b;
+      --accent-amber: #b45309;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-stage);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Stage Viewport */
+    #stage-viewport {
+      position: fixed;
+      inset: 0;
+      background: #000000;
+      overflow: hidden;
+      cursor: pointer;
+      touch-action: pan-y;
+    }
+
+    #stage-mirror-wrap {
+      width: 100%;
+      height: 100%;
+      transform-origin: center center;
+      transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    #stage-mirror-wrap.mirrored {
+      transform: scaleX(-1);
+    }
+
+    #script-track {
+      will-change: transform;
+      width: 100%;
+      padding-left: 10%;
+      padding-right: 10%;
+      color: #ffffff;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      line-height: 1.48;
+      text-align: left;
+    }
+
+    .script-line {
+      margin: 0 0 0.65em 0;
+      word-break: break-word;
+    }
+
+    .script-line.is-empty {
+      height: 0.8em;
+      margin-bottom: 0.4em;
+    }
+
+    .cue-tag {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 0.48em;
+      font-weight: 600;
+      color: var(--accent-amber);
+      vertical-align: middle;
+      margin-right: 0.45em;
+      opacity: 0.85;
+      letter-spacing: 0.04em;
+    }
+
+    /* Edge gradient scrims to focus eye on center */
+    .stage-scrim-top,
+    .stage-scrim-bottom {
+      position: fixed;
+      left: 0;
+      right: 0;
+      height: 22vh;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .stage-scrim-top {
+      top: 0;
+      background: linear-gradient(to bottom, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.45) 55%, rgba(0, 0, 0, 0) 100%);
+    }
+
+    .stage-scrim-bottom {
+      bottom: 0;
+      background: linear-gradient(to top, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.45) 55%, rgba(0, 0, 0, 0) 100%);
+    }
+
+    /* Center Red Guideline */
+    #center-guideline {
+      position: fixed;
+      left: 0;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 2px;
+      background: rgba(239, 68, 68, 0.85);
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.35);
+      pointer-events: none;
+      z-index: 6;
+    }
+
+    #center-guideline::before,
+    #center-guideline::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 0;
+      height: 0;
+      border-top: 8px solid transparent;
+      border-bottom: 8px solid transparent;
+    }
+
+    #center-guideline::before {
+      left: 0;
+      border-left: 12px solid var(--accent-red);
+    }
+
+    #center-guideline::after {
+      right: 0;
+      border-right: 12px solid var(--accent-red);
+    }
+
+    /* Top Timecode Header */
+    #top-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: max(10px, env(safe-area-inset-top)) 16px 10px 16px;
+      background: linear-gradient(to bottom, rgba(10, 12, 16, 0.96) 0%, rgba(10, 12, 16, 0.86) 100%);
+      border-bottom: 1px solid var(--border-subtle);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+    }
+
+    #top-bar.is-hidden {
+      opacity: 0;
+      transform: translateY(-100%);
+      pointer-events: none;
+    }
+
+    .tc-cluster {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    /* MTC Activity LED */
+    .mtc-led {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: #1f2937;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      transition: background-color 0.06s linear, box-shadow 0.06s linear;
+    }
+
+    .mtc-led.is-lit {
+      background: var(--accent-green);
+      border-color: #86efac;
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.9);
+    }
+
+    /* MTC Flow BPM Indicator */
+    .mtc-bpm-indicator {
+      display: inline-flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 44px;
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      cursor: pointer;
+      flex-shrink: 0;
+      text-align: left;
+      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+
+    .mtc-bpm-indicator:hover {
+      background: var(--bg-surface-hover);
+      border-color: var(--border-strong);
+    }
+
+    .mtc-bpm-indicator:active {
+      transform: scale(0.98);
+    }
+
+    .mtc-bpm-value {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: 0.03em;
+      color: var(--text-primary);
+    }
+
+    .mtc-bpm-sub {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 1.15;
+      color: var(--text-muted);
+      letter-spacing: 0.02em;
+    }
+
+    .mtc-bpm-indicator.is-active {
+      border-color: rgba(34, 197, 94, 0.55);
+      background: rgba(34, 197, 94, 0.12);
+    }
+
+    .mtc-bpm-indicator.is-active .mtc-bpm-value {
+      color: #86efac;
+    }
+
+    .mtc-bpm-indicator.is-active .mtc-bpm-sub {
+      color: #bbf7d0;
+    }
+
+    .mtc-bpm-indicator.is-varispeed {
+      border-color: rgba(245, 158, 11, 0.65);
+      background: rgba(245, 158, 11, 0.14);
+    }
+
+    .mtc-bpm-indicator.is-varispeed .mtc-bpm-value {
+      color: #fcd34d;
+    }
+
+    .mtc-bpm-indicator.is-varispeed .mtc-bpm-sub {
+      color: #fde68a;
+    }
+
+    .mtc-bpm-indicator.is-clock {
+      border-color: rgba(59, 130, 246, 0.65);
+      background: rgba(59, 130, 246, 0.16);
+    }
+
+    .mtc-bpm-indicator.is-clock .mtc-bpm-value {
+      color: #93c5fd;
+    }
+
+    .mtc-bpm-indicator.is-clock .mtc-bpm-sub {
+      color: #bfdbfe;
+    }
+
+    .tc-readout-wrap {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    #tc-display {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(1.5rem, 3.8vw, 2.5rem);
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: 0.04em;
+      color: #ffffff;
+    }
+
+    .tc-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 2px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tc-meta-sep {
+      color: var(--text-muted);
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .top-actions::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* Buttons & Controls (min 44px touch targets) */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 44px;
+      padding: 0 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      flex-shrink: 0;
+      cursor: pointer;
+      transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+    }
+
+    .btn:hover {
+      background: var(--bg-surface-hover);
+      border-color: var(--border-strong);
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn:focus-visible,
+    select:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible {
+      outline: 2px solid var(--accent-blue);
+      outline-offset: 2px;
+    }
+
+    .btn.is-active {
+      background: var(--accent-blue);
+      border-color: #60a5fa;
+      color: #ffffff;
+    }
+
+    .btn.btn-danger {
+      background: rgba(239, 68, 68, 0.16);
+      border-color: rgba(239, 68, 68, 0.45);
+      color: #fecaca;
+    }
+
+    .btn.btn-success {
+      background: rgba(34, 197, 94, 0.18);
+      border-color: rgba(34, 197, 94, 0.5);
+      color: #bbf7d0;
+    }
+
+    .btn.btn-install {
+      background: #ffffff;
+      color: #000000;
+      border-color: #ffffff;
+    }
+
+    .btn svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+
+    /* Bottom Control Bar */
+    #bottom-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
+      padding: 12px 16px max(12px, env(safe-area-inset-bottom)) 16px;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border-subtle);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+    }
+
+    #bottom-bar.is-hidden {
+      opacity: 0;
+      transform: translateY(100%);
+      pointer-events: none;
+    }
+
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 14px;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .control-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    select,
+    input[type="text"],
+    input[type="number"] {
+      min-height: 44px;
+      padding: 0 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      background: #0d0f13;
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 13px;
+    }
+
+    input.tc-input {
+      width: 118px;
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      text-align: center;
+      letter-spacing: 0.04em;
+    }
+
+    input.speed-px-input {
+      width: 74px;
+      padding: 0 8px;
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    /* Segmented Mode Selector */
+    .segmented {
+      display: inline-flex;
+      padding: 3px;
+      border-radius: var(--radius-sm);
+      background: #0d0f13;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .segmented button {
+      min-height: 38px;
+      padding: 0 12px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    .segmented button.is-selected {
+      background: var(--bg-surface-hover);
+      color: #ffffff;
+    }
+
+    .segmented-compact button {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 36px;
+      padding: 0 9px;
+      font-size: 12px;
+    }
+
+    .segmented-compact button svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+
+    /* Range Sliders */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      border-radius: 999px;
+      background: #2b313c;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 2px solid #000000;
+      cursor: pointer;
+    }
+
+    .slider-val {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      color: var(--text-secondary);
+      min-width: 38px;
+    }
+
+    /* Collapsible MTC Simulator Drawer */
+    #sim-panel {
+      display: none;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      background: #0d0f13;
+      border: 1px solid var(--border-subtle);
+      gap: 10px;
+      flex-direction: column;
+    }
+
+    #sim-panel.is-open {
+      display: flex;
+    }
+
+    .sim-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #sim-slider {
+      flex: 1 1 220px;
+      min-width: 180px;
+    }
+
+    /* Floating Hint Pill when HUD is hidden */
+    #hud-reveal-hint {
+      position: fixed;
+      bottom: max(14px, env(safe-area-inset-bottom));
+      right: 16px;
+      z-index: 15;
+      padding: 6px 12px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.45);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+
+    #hud-reveal-hint.is-visible {
+      opacity: 1;
+    }
+
+    /* Offline Banner */
+    #offline-banner {
+      display: none;
+      position: fixed;
+      top: 76px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      background: rgba(245, 158, 11, 0.18);
+      border: 1px solid rgba(245, 158, 11, 0.45);
+      color: #fde68a;
+      font-size: 12px;
+      font-weight: 600;
+      pointer-events: none;
+    }
+
+    #offline-banner.is-visible {
+      display: block;
+    }
+
+    /* Modals (Script Editor & Help) */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .modal-backdrop.is-open {
+      display: flex;
+    }
+
+    .modal-card {
+      width: 100%;
+      max-width: 780px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      background: #121419;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .modal-title {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .modal-body {
+      padding: 16px 18px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .modal-footer {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 18px;
+      border-top: 1px solid var(--border-subtle);
+      background: #0d0f13;
+    }
+
+    #script-textarea {
+      width: 100%;
+      min-height: 320px;
+      height: 48vh;
+      padding: 14px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      background: #08090c;
+      color: #ffffff;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      line-height: 1.55;
+      resize: vertical;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
+    .help-section h3 {
+      margin: 0 0 6px 0;
+      font-size: 14px;
+      color: #ffffff;
+    }
+
+    .help-section p,
+    .help-section li {
+      margin: 0 0 6px 0;
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--text-secondary);
+    }
+
+    .help-section ol,
+    .help-section ul {
+      margin: 0 0 10px 0;
+      padding-left: 20px;
+    }
+
+    .help-code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #1d212a;
+      color: #fbbf24;
+    }
+
+    /* Pedal Mapping Modal */
+    .pedal-status-strip {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .pedal-last-signal {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      font-weight: 700;
+      color: #86efac;
+    }
+
+    .pedal-speed-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      padding: 12px;
+      border-radius: var(--radius-md);
+      background: #0d0f13;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .pedal-speed-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .pedal-speed-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pedal-speed-row input[type="range"] {
+      flex: 1 1 auto;
+      min-width: 90px;
+    }
+
+    .pedal-mapping-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .pedal-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      background: #0d0f13;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .pedal-row.is-listening {
+      border-color: var(--accent-amber);
+      background: rgba(245, 158, 11, 0.12);
+    }
+
+    .pedal-row-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 180px;
+      flex: 1 1 200px;
+    }
+
+    .pedal-row-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .pedal-row-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .pedal-row-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .pedal-binding-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 38px;
+      padding: 0 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      background: #171b22;
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .pedal-binding-badge.is-midi {
+      border-color: rgba(59, 130, 246, 0.5);
+      color: #93c5fd;
+    }
+
+    .pedal-binding-badge.is-empty {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .pedal-binding-badge.is-listening {
+      border-color: var(--accent-amber);
+      background: rgba(245, 158, 11, 0.18);
+      color: #fcd34d;
+    }
+
+    .btn.is-listening {
+      background: var(--accent-amber);
+      border-color: #fbbf24;
+      color: #000000;
+    }
+
+    .pedal-gesture-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 6px;
+      padding-left: 0;
+      list-style: none;
+    }
+
+    .pedal-gesture-list li {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .pedal-gesture-tag {
+      display: inline-block;
+      min-width: 118px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent-amber);
+    }
+
+    /* Discreet Top Visual Feedback Toast for Pedal Commands */
+    #pedal-toast {
+      position: fixed;
+      top: max(14px, env(safe-area-inset-top));
+      left: 50%;
+      transform: translateX(-50%) translateY(-10px);
+      z-index: 36;
+      padding: 7px 16px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(59, 130, 246, 0.55);
+      background: rgba(15, 23, 42, 0.92);
+      color: #ffffff;
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      pointer-events: none;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      opacity: 0;
+      transition: opacity 0.16s ease, transform 0.16s ease, top 0.2s ease;
+    }
+
+    #pedal-toast.is-hud-visible {
+      top: calc(max(10px, env(safe-area-inset-top)) + 78px);
+    }
+
+    #pedal-toast.is-visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Inverted Colors (Black Text on White Background for Bright Environments) */
+    body.inverted-colors #stage-viewport {
+      background: #ffffff;
+    }
+
+    body.inverted-colors #script-track {
+      color: #000000;
+    }
+
+    body.inverted-colors .stage-scrim-top {
+      background: linear-gradient(to bottom, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0.45) 55%, rgba(255, 255, 255, 0) 100%);
+    }
+
+    body.inverted-colors .stage-scrim-bottom {
+      background: linear-gradient(to top, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0.45) 55%, rgba(255, 255, 255, 0) 100%);
+    }
+
+    body.inverted-colors #top-bar {
+      background: linear-gradient(to bottom, rgba(248, 250, 252, 0.96) 0%, rgba(244, 246, 249, 0.88) 100%);
+    }
+
+    body.inverted-colors #tc-display {
+      color: #000000;
+    }
+
+    body.inverted-colors .mtc-led {
+      background: #cbd5e1;
+      border-color: rgba(15, 23, 42, 0.25);
+    }
+
+    body.inverted-colors .mtc-led.is-lit {
+      background: #16a34a;
+      border-color: #15803d;
+      box-shadow: 0 0 12px rgba(22, 163, 74, 0.7);
+    }
+
+    body.inverted-colors .mtc-bpm-indicator {
+      background: #ffffff;
+      border-color: rgba(15, 23, 42, 0.22);
+    }
+
+    body.inverted-colors .mtc-bpm-indicator .mtc-bpm-value {
+      color: #0f172a;
+    }
+
+    body.inverted-colors .mtc-bpm-indicator .mtc-bpm-sub {
+      color: #475569;
+    }
+
+    body.inverted-colors .mtc-bpm-indicator.is-active {
+      background: rgba(22, 163, 74, 0.12);
+      border-color: rgba(22, 163, 74, 0.5);
+    }
+
+    body.inverted-colors .mtc-bpm-indicator.is-active .mtc-bpm-value,
+    body.inverted-colors .mtc-bpm-indicator.is-active .mtc-bpm-sub {
+      color: #166534;
+    }
+
+    body.inverted-colors .mtc-bpm-indicator.is-varispeed {
+      background: rgba(245, 158, 11, 0.14);
+      border-color: rgba(180, 83, 9, 0.5);
+    }
+
+    body.inverted-colors .mtc-bpm-indicator.is-varispeed .mtc-bpm-value,
+    body.inverted-colors .mtc-bpm-indicator.is-varispeed .mtc-bpm-sub {
+      color: #92400e;
+    }
+
+    body.inverted-colors .mtc-bpm-indicator.is-clock {
+      background: rgba(37, 99, 235, 0.12);
+      border-color: rgba(37, 99, 235, 0.5);
+    }
+
+    body.inverted-colors .mtc-bpm-indicator.is-clock .mtc-bpm-value,
+    body.inverted-colors .mtc-bpm-indicator.is-clock .mtc-bpm-sub {
+      color: #1e40af;
+    }
+
+    body.inverted-colors select,
+    body.inverted-colors input[type="text"],
+    body.inverted-colors input[type="number"],
+    body.inverted-colors .segmented,
+    body.inverted-colors #sim-panel,
+    body.inverted-colors .pedal-speed-grid,
+    body.inverted-colors .pedal-row,
+    body.inverted-colors .modal-footer,
+    body.inverted-colors #script-textarea {
+      background: #ffffff;
+      color: #000000;
+    }
+
+    body.inverted-colors .pedal-binding-badge {
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+
+    body.inverted-colors .pedal-binding-badge.is-midi {
+      color: #1d4ed8;
+    }
+
+    body.inverted-colors .pedal-last-signal {
+      color: #15803d;
+    }
+
+    body.inverted-colors .pedal-gesture-tag {
+      color: #b45309;
+    }
+
+    body.inverted-colors #pedal-toast {
+      background: rgba(255, 255, 255, 0.95);
+      color: #0f172a;
+      border-color: rgba(37, 99, 235, 0.55);
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+    }
+
+    body.inverted-colors .segmented button.is-selected {
+      background: #0f172a;
+      color: #ffffff;
+    }
+
+    body.inverted-colors input[type="range"] {
+      background: #cbd5e1;
+    }
+
+    body.inverted-colors input[type="range"]::-webkit-slider-thumb {
+      background: #0f172a;
+      border-color: #ffffff;
+    }
+
+    body.inverted-colors .modal-card {
+      background: #f8fafc;
+    }
+
+    body.inverted-colors .help-section h3 {
+      color: #000000;
+    }
+
+    body.inverted-colors .help-code {
+      background: #e2e8f0;
+      color: #92400e;
+    }
+
+    body.inverted-colors .btn.btn-danger {
+      background: rgba(239, 68, 68, 0.14);
+      border-color: rgba(220, 38, 38, 0.45);
+      color: #991b1b;
+    }
+
+    body.inverted-colors .btn.btn-success {
+      background: rgba(22, 163, 74, 0.14);
+      border-color: rgba(22, 163, 74, 0.45);
+      color: #166534;
+    }
+
+    body.inverted-colors .btn.btn-install {
+      background: #0f172a;
+      color: #ffffff;
+      border-color: #0f172a;
+    }
+
+    body.inverted-colors #hud-reveal-hint {
+      color: rgba(15, 23, 42, 0.55);
+    }
+
+    body.inverted-colors #offline-banner {
+      background: rgba(245, 158, 11, 0.2);
+      border-color: rgba(180, 83, 9, 0.45);
+      color: #78350f;
+    }
+
+    /* Cue Marker Sidebar */
+    #cue-sidebar-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 38;
+      background: rgba(0, 0, 0, 0.55);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    #cue-sidebar-backdrop.is-open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #cue-sidebar {
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: min(350px, 86vw);
+      z-index: 40;
+      display: flex;
+      flex-direction: column;
+      background: rgba(14, 16, 21, 0.97);
+      border-right: 1px solid var(--border-strong);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      transform: translateX(-100%);
+      transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    #cue-sidebar.is-open {
+      transform: translateX(0);
+    }
+
+    .cue-sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .cue-sidebar-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .cue-sidebar-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .cue-item {
+      width: 100%;
+      min-height: 52px;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .cue-item:hover {
+      background: var(--bg-surface-hover);
+      border-color: var(--border-strong);
+    }
+
+    .cue-item.is-active {
+      background: rgba(59, 130, 246, 0.18);
+      border-color: var(--accent-blue);
+    }
+
+    .cue-item-tc {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent-amber);
+      letter-spacing: 0.04em;
+    }
+
+    .cue-item-label {
+      font-size: 13px;
+      line-height: 1.35;
+      color: var(--text-secondary);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .cue-item.is-active .cue-item-label {
+      color: var(--text-primary);
+    }
+
+    .cue-sidebar-empty {
+      padding: 20px 14px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+
+    body.inverted-colors #cue-sidebar {
+      background: rgba(248, 250, 252, 0.98);
+    }
+
+    body.inverted-colors .cue-item {
+      background: #ffffff;
+    }
+
+    body.inverted-colors .cue-item.is-active {
+      background: rgba(59, 130, 246, 0.12);
+    }
+
+    /* Script Presets Toolbar */
+    .preset-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .preset-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .preset-row select {
+      flex: 1 1 180px;
+      min-width: 150px;
+    }
+
+    .preset-row input[type="text"] {
+      flex: 1 1 180px;
+      min-width: 150px;
+    }
+
+    .preset-feedback {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent-green);
+      min-height: 16px;
+    }
+
+    body.inverted-colors .preset-feedback {
+      color: #15803d;
+    }
+
+    /* Setlist Quick Navigation Row in Bottom Bar */
+    .setlist-nav-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .btn-song-nav {
+      min-height: 48px;
+      padding: 0 18px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .btn-song-nav:disabled {
+      opacity: 0.38;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .active-song-status {
+      flex: 1;
+      min-width: 0;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Setlist Right Drawer */
+    #setlist-drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 38;
+      background: rgba(0, 0, 0, 0.58);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    #setlist-drawer-backdrop.is-open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #setlist-drawer {
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      right: 0;
+      width: min(460px, 94vw);
+      z-index: 42;
+      display: flex;
+      flex-direction: column;
+      background: rgba(14, 16, 21, 0.98);
+      border-left: 1px solid var(--border-strong);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      transform: translateX(100%);
+      transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    #setlist-drawer.is-open {
+      transform: translateX(0);
+    }
+
+    .setlist-drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .setlist-drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .drawer-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .drawer-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .drawer-row select,
+    .drawer-row input[type="text"] {
+      flex: 1 1 160px;
+      min-width: 140px;
+    }
+
+    .drawer-section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+
+    .song-form-textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      background: #08090c;
+      color: #ffffff;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.45;
+      resize: vertical;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
+    .setlist-songs-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .song-card {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      background: #0d0f13;
+      transition: border-color 0.15s ease, background-color 0.15s ease, opacity 0.15s ease;
+    }
+
+    .song-card.is-active {
+      border-color: var(--accent-blue);
+      background: rgba(59, 130, 246, 0.15);
+    }
+
+    .song-card.is-dragging {
+      opacity: 0.45;
+    }
+
+    .song-card.is-drag-over {
+      border-color: var(--accent-amber);
+      border-style: dashed;
+    }
+
+    .song-card-main {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .song-card-info {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      gap: 2px;
+    }
+
+    .song-card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .song-card-meta {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .song-card-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-mini {
+      min-height: 36px;
+      padding: 0 10px;
+      font-size: 12px;
+    }
+
+    .setlist-feedback {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent-green);
+      min-height: 16px;
+    }
+
+    body.inverted-colors #setlist-drawer {
+      background: rgba(248, 250, 252, 0.98);
+    }
+
+    body.inverted-colors .song-card,
+    body.inverted-colors .song-form-textarea {
+      background: #ffffff;
+      color: #000000;
+    }
+
+    body.inverted-colors .song-card.is-active {
+      background: rgba(59, 130, 246, 0.12);
+    }
+
+    body.inverted-colors .setlist-feedback {
+      color: #15803d;
+    }
+
+    @media (max-width: 720px) {
+      #top-bar {
+        padding: max(8px, env(safe-area-inset-top)) 10px 8px 10px;
+      }
+      .btn {
+        padding: 0 10px;
+        font-size: 12px;
+      }
+      .btn-text-hide-sm {
+        display: none;
+      }
+      #bottom-bar {
+        padding: 10px 12px max(10px, env(safe-area-inset-bottom)) 12px;
+      }
+      .segmented {
+        flex-wrap: wrap;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Teleprompter Stage -->
+  <div id="stage-viewport" title="Tocca lo schermo per mostrare o nascondere i controlli">
+    <div id="stage-mirror-wrap">
+      <div id="script-track"></div>
+    </div>
+  </div>
+
+  <div class="stage-scrim-top"></div>
+  <div class="stage-scrim-bottom"></div>
+  <div id="center-guideline" aria-hidden="true"></div>
+  <div id="hud-reveal-hint">Tocca lo schermo per i controlli</div>
+  <div id="offline-banner">Modalità Offline attiva — dati salvati localmente</div>
+  <div id="pedal-toast" class="is-hud-visible" role="status" aria-live="polite"></div>
+
+  <!-- Top Bar: Timecode + LED + Primary Actions -->
+  <header id="top-bar">
+    <div class="tc-cluster">
+      <div id="mtc-led" class="mtc-led" title="Segnale MTC in movimento"></div>
+      <button
+        type="button"
+        id="mtc-bpm-indicator"
+        class="mtc-bpm-indicator"
+        title="Indicatore BPM dal flusso MTC (tocca a tempo per impostare il BPM di riferimento, doppio tocco per reset a 120 BPM)"
+      >
+        <span id="mtc-bpm-value" class="mtc-bpm-value">--- BPM</span>
+        <span id="mtc-bpm-sub" class="mtc-bpm-sub">MTC · 120 ref</span>
+      </button>
+      <div class="tc-readout-wrap">
+        <div id="tc-display">01:00:00:00</div>
+        <div class="tc-meta">
+          <span id="fps-readout">25 fps</span>
+          <span class="tc-meta-sep">·</span>
+          <span id="midi-status-text">MIDI in attesa</span>
+          <span class="tc-meta-sep">·</span>
+          <span id="active-song-meta">Setlist pronta</span>
+          <span class="tc-meta-sep">·</span>
+          <span id="wakelock-status">Schermo attivo: --</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button type="button" id="btn-install" class="btn btn-install hidden" title="Installa app sul tablet">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Installa</span>
+      </button>
+      <button type="button" id="btn-setlist-drawer" class="btn" title="Gestione Setlist e Brani">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        <span>Setlist</span>
+      </button>
+      <button type="button" id="btn-editor" class="btn" title="Modifica copione">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        <span>Copione</span>
+      </button>
+      <button type="button" id="btn-cue-sidebar" class="btn" title="Mostra elenco Cue Marker">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <span id="btn-cue-sidebar-label">Cue (0)</span>
+      </button>
+      <button type="button" id="btn-sim-toggle" class="btn" title="Apri simulatore MTC per prove">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <span class="btn-text-hide-sm">Simulatore</span>
+      </button>
+      <button type="button" id="btn-pedal-modal" class="btn" title="Configurazione Pedale 2 Tasti (LEKATO Bluetooth / MIDI)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><line x1="8" y1="12" x2="8.01" y2="12"/><line x1="12" y1="12" x2="12.01" y2="12"/><line x1="16" y1="12" x2="16.01" y2="12"/></svg>
+        <span class="btn-text-hide-sm">Pedale 2 Tasti</span>
+      </button>
+      <button type="button" id="btn-mirror" class="btn" title="Ribaltamento orizzontale (Specchio)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M8 7H4l4 10H4"/><path d="M16 7h4l-4 10h4"/></svg>
+        <span>Specchio</span>
+      </button>
+      <button type="button" id="btn-fullscreen" class="btn" title="Schermo intero">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        <span class="btn-text-hide-sm">Schermo Intero</span>
+      </button>
+      <button type="button" id="btn-help" class="btn" title="Istruzioni d'uso">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span class="btn-text-hide-sm">Guida</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Bottom Control Bar -->
+  <footer id="bottom-bar">
+    <!-- Collapsible MTC Simulator -->
+    <div id="sim-panel">
+      <div class="sim-row">
+        <span class="control-label">Simulatore MTC</span>
+        <button type="button" id="btn-sim-play" class="btn btn-success">Simula Play MTC</button>
+        <button type="button" id="btn-sim-stop" class="btn btn-danger">Stop</button>
+        <button type="button" id="btn-sim-reset" class="btn">Torna a Start</button>
+        <div class="control-group">
+          <label class="control-label" for="sim-jump-tc">Vai a TC</label>
+          <input type="text" id="sim-jump-tc" class="tc-input" value="01:00:00:00" maxlength="11" placeholder="HH:MM:SS:FF" aria-label="Forza Timecode specifico" />
+          <button type="button" id="btn-sim-jump" class="btn is-active">Salta</button>
+        </div>
+        <input type="range" id="sim-slider" min="0" max="1000" value="0" aria-label="Cursore simulazione timecode" />
+        <span id="sim-range-label" class="slider-val" style="min-width: auto;">01:00:00:00</span>
+      </div>
+    </div>
+
+    <!-- Setlist Quick Song Navigation -->
+    <div class="setlist-nav-row">
+      <button type="button" id="btn-prev-song" class="btn btn-song-nav" title="Passa al brano precedente della setlist">
+        ◀ Brano Precedente
+      </button>
+      <div id="active-song-indicator" class="active-song-status">Nessun brano attivo</div>
+      <button type="button" id="btn-next-song" class="btn btn-song-nav" title="Passa al brano successivo della setlist">
+        Brano Successivo ▶
+      </button>
+    </div>
+
+    <!-- MIDI + Sync Mode + Timecode Inputs -->
+    <div class="controls-row">
+      <div class="control-group">
+        <label class="control-label" for="midi-port-select">Porta MIDI</label>
+        <select id="midi-port-select">
+          <option value="">-- Nessuna porta rilevata --</option>
+        </select>
+        <button type="button" id="btn-refresh-midi" class="btn">Aggiorna porte</button>
+      </div>
+
+      <div class="control-group">
+        <span class="control-label">Sync</span>
+        <div class="segmented" role="tablist" aria-label="Modalità di sincronizzazione">
+          <button type="button" id="mode-btn-a" class="is-selected" role="tab" aria-selected="true">A: Start / End</button>
+          <button type="button" id="mode-btn-b" role="tab" aria-selected="false">B: Cue Marker</button>
+          <button type="button" id="mode-btn-auto" role="tab" aria-selected="false">Auto-Scroll Smooth</button>
+        </div>
+      </div>
+
+      <div id="mode-a-inputs" class="control-group">
+        <label class="control-label" for="input-start-tc">Start TC</label>
+        <input type="text" id="input-start-tc" class="tc-input" value="01:00:00:00" maxlength="11" />
+        <label class="control-label" for="input-end-tc">End TC</label>
+        <input type="text" id="input-end-tc" class="tc-input" value="01:03:30:00" maxlength="11" />
+      </div>
+
+      <div id="mode-b-info" class="control-group hidden">
+        <span id="cue-count-text" class="control-label">0 Cue Marker rilevati</span>
+      </div>
+
+      <div id="mode-auto-controls" class="control-group hidden" style="flex-wrap: wrap;">
+        <button type="button" id="btn-auto-play" class="btn btn-success" title="Avvia o metti in pausa lo scorrimento continuo (tasto Spazio)">▶ Avvia</button>
+        <button type="button" id="btn-auto-reset" class="btn" title="Riporta il testo all'inizio">⏮ Inizio</button>
+        <label class="control-label" for="auto-speed-slider">Velocità</label>
+        <input type="range" id="auto-speed-slider" min="5" max="300" step="1" value="45" aria-label="Velocità scorrimento in pixel al secondo" />
+        <input type="number" id="auto-speed-input" class="speed-px-input" min="1" max="600" step="1" value="45" aria-label="Velocità esatta in pixel al secondo" />
+        <span class="slider-val" style="min-width: auto;">px/s</span>
+      </div>
+
+      <div class="control-group">
+        <label class="control-label" for="fps-select">FPS</label>
+        <select id="fps-select">
+          <option value="auto">Auto (da MTC)</option>
+          <option value="24">24 fps</option>
+          <option value="25" selected>25 fps</option>
+          <option value="29.97">29.97 DF</option>
+          <option value="30">30 fps</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Typography & Stage Ergonomics -->
+    <div class="controls-row">
+      <div class="control-group">
+        <label class="control-label" for="font-size-slider">Font</label>
+        <input type="range" id="font-size-slider" min="24" max="96" value="52" />
+        <span id="font-size-val" class="slider-val">52px</span>
+      </div>
+
+      <div class="control-group">
+        <label class="control-label" for="margin-slider">Margini</label>
+        <input type="range" id="margin-slider" min="2" max="30" value="10" />
+        <span id="margin-val" class="slider-val">10%</span>
+      </div>
+
+      <div class="control-group">
+        <label class="control-label" for="line-height-slider">Interlinea</label>
+        <input type="range" id="line-height-slider" min="115" max="200" value="148" />
+        <span id="line-height-val" class="slider-val">1.48</span>
+      </div>
+
+      <div class="control-group">
+        <span class="control-label">Allineamento</span>
+        <div class="segmented segmented-compact" role="group" aria-label="Allineamento del testo">
+          <button type="button" id="align-btn-left" class="is-selected" data-align="left" title="Allineato a Sinistra" aria-pressed="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>
+            <span>Sinistra</span>
+          </button>
+          <button type="button" id="align-btn-center" data-align="center" title="Centrato" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+            <span>Centrato</span>
+          </button>
+          <button type="button" id="align-btn-justify" data-align="justify" title="Giustificato" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            <span>Giustificato</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="control-group" style="margin-left: auto;">
+        <button type="button" id="btn-invert" class="btn" title="Inverti colori (testo nero su fondo bianco per ambienti luminosi)">
+          Inverti Colori
+        </button>
+        <button type="button" id="btn-autohide" class="btn is-active" title="Nascondi automaticamente i controlli dopo 4s">
+          Auto-nascondi: ON
+        </button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Script Editor Modal -->
+  <div id="editor-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="editor-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="editor-title" class="modal-title">Modifica Copione</h2>
+        <button type="button" id="btn-close-editor" class="btn">Chiudi</button>
+      </div>
+      <div class="modal-body">
+        <div class="preset-bar">
+          <div class="preset-row">
+            <label class="control-label" for="preset-select">Preset salvati</label>
+            <select id="preset-select" aria-label="Seleziona preset copione"></select>
+            <button type="button" id="btn-preset-load" class="btn">Carica</button>
+            <button type="button" id="btn-preset-delete" class="btn btn-danger">Elimina</button>
+          </div>
+          <div class="preset-row">
+            <label class="control-label" for="preset-name-input">Nome preset</label>
+            <input type="text" id="preset-name-input" maxlength="40" placeholder="Es. Registrazione, Prove, Diretta..." />
+            <button type="button" id="btn-preset-save" class="btn is-active">Salva Preset</button>
+          </div>
+          <div id="preset-feedback" class="preset-feedback" aria-live="polite"></div>
+        </div>
+        <p style="margin:0; font-size:13px; color:var(--text-secondary);">
+          In <strong>Modalità B (Cue Marker)</strong> inserisci i tag <span class="help-code">[HH:MM:SS:FF]</span> prima delle battute per sincronizzare ogni sezione al timecode esatto di Nuendo.
+        </p>
+        <textarea id="script-textarea" spellcheck="false" placeholder="Incolla o scrivi qui il copione..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <div class="control-group">
+          <button type="button" id="btn-load-sample" class="btn">Carica Esempio Cue</button>
+          <button type="button" id="btn-clear-script" class="btn btn-danger">Svuota</button>
+        </div>
+        <button type="button" id="btn-save-editor" class="btn is-active">Applica al Teleprompter</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help & Instructions Modal -->
+  <div id="help-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="help-title" class="modal-title">Istruzioni d'uso — Nuendo MTC &amp; Tablet Android</h2>
+        <button type="button" id="btn-close-help" class="btn">Chiudi</button>
+      </div>
+      <div class="modal-body">
+        <div class="help-section">
+          <h3>1. Collegamento Steinberg Nuendo → Tablet Android (USB MIDI)</h3>
+          <ol>
+            <li>Collega l'interfaccia MIDI USB al tablet Android tramite adattatore USB-OTG (o usa un cavo USB-C diretto se la periferica supporta MIDI class-compliant).</li>
+            <li>Apri questa pagina in <strong>Google Chrome</strong> su Android (connessione HTTPS o app PWA installata).</li>
+            <li>In <strong>Nuendo</strong>: vai su <em>Transport → Project Synchronization Setup → Destinations</em>, attiva <strong>MIDI Timecode Destinations</strong> e seleziona la porta MIDI collegata al tablet. Verifica che il frame rate del progetto (es. 25 fps) corrisponda.</li>
+            <li>Nel Teleprompter premi <strong>Aggiorna porte</strong>, seleziona la porta di ingresso MIDI e verifica che il <strong>LED verde</strong> lampeggi quando premi Play in Nuendo.</li>
+          </ol>
+        </div>
+        <div class="help-section">
+          <h3>2. Doppia Modalità di Sincronizzazione</h3>
+          <ul>
+            <li><strong>Modalità A (Start / End):</strong> imposta <span class="help-code">Start TC</span> e <span class="help-code">End TC</span>. Il testo scorre linearmente dall'inizio alla fine tra i due timecode.</li>
+            <li><strong>Modalità B (Cue Marker):</strong> inserisci tag nel testo come <span class="help-code">[01:00:10:00] Prima battuta...</span>. Il testo interpola fluidamente tra un marker e il successivo allineando la riga alla linea rossa centrale esatta.</li>
+            <li><strong>Auto-Scroll Smooth (px/s):</strong> modalità indipendente dal timecode MTC che fa scorrere il testo a velocità costante in <em>pixel al secondo</em> (regolabile con slider, valore numerico e tasto <strong>Spazio</strong> per Avvia/Pausa).</li>
+            <li><strong>Scrubbing / Locate:</strong> spostando il cursore in Nuendo (anche a fermo tramite Full Frame SysEx), il testo salta istantaneamente al punto esatto.</li>
+          </ul>
+        </div>
+        <div class="help-section">
+          <h3>3. Controlli da Studio &amp; Installazione PWA</h3>
+          <ul>
+            <li>Tocca qualsiasi punto del testo per mostrare o nascondere le barre dei controlli.</li>
+            <li>Usa <strong>Specchio</strong> per ribaltare il testo su vetri beam-splitter e <strong>Schermo Intero</strong> per la massima pulizia visiva.</li>
+            <li>Usa <strong>Pedale</strong> in alto per associare pedali Bluetooth (HID tastiera) o MIDI con la funzione <em>Assegna</em> (disattivata automaticamente mentre scrivi nei campi di testo).</li>
+            <li>Lo schermo resta acceso automaticamente tramite <em>Screen Wake Lock API</em> e tutte le impostazioni vengono salvate nel dispositivo.</li>
+          </ul>
+        </div>
+        <div id="ios-install-note" class="help-section hidden">
+          <h3>Installazione su iPhone / iPad (Safari)</h3>
+          <p>Premi il pulsante <strong>Condividi</strong> nella barra di Safari e scegli <strong>Aggiungi alla schermata Home</strong>.</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-export-mtc-log" class="btn" title="Scarica gli ultimi 100 messaggi MTC ricevuti in formato .txt">
+          Esporta Log MTC (0/100)
+        </button>
+        <div class="control-group">
+          <span style="font-size:12px; color:var(--text-muted);">Salvataggio locale automatico attivo</span>
+          <button type="button" id="btn-close-help-footer" class="btn is-active">Ho capito</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2-Switch Pedal (LEKATO) Configuration Modal -->
+  <div id="pedal-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="pedal-modal-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="pedal-modal-title" class="modal-title">Configurazione Pedale 2 Tasti (LEKATO)</h2>
+        <button type="button" id="btn-close-pedal" class="btn">Chiudi</button>
+      </div>
+      <div class="modal-body">
+        <div class="pedal-status-strip">
+          <span id="pedal-midi-banner">Supporto attivo: Tastiera Bluetooth HID + Controller MIDI esterni</span>
+          <span id="pedal-last-signal" class="pedal-last-signal">Ultimo segnale: —</span>
+        </div>
+
+        <div class="pedal-speed-grid">
+          <div class="pedal-speed-item">
+            <label class="control-label" for="pedal-scroll-speed-slider">Velocità scorrimento manuale (Play/Stop)</label>
+            <div class="pedal-speed-row">
+              <input type="range" id="pedal-scroll-speed-slider" min="5" max="300" step="1" value="45" />
+              <input type="number" id="pedal-scroll-speed-input" class="speed-px-input" min="1" max="600" step="1" value="45" />
+              <span class="slider-val" style="min-width:auto;">px/s</span>
+            </div>
+          </div>
+          <div class="pedal-speed-item">
+            <label class="control-label" for="pedal-fast-speed-slider">Velocità Avanza / Indietro Veloce (tenuta &gt; 400ms)</label>
+            <div class="pedal-speed-row">
+              <input type="range" id="pedal-fast-speed-slider" min="60" max="1200" step="10" value="340" />
+              <input type="number" id="pedal-fast-speed-input" class="speed-px-input" min="20" max="1500" step="10" value="340" />
+              <span class="slider-val" style="min-width:auto;">px/s</span>
+            </div>
+          </div>
+        </div>
+
+        <p style="margin:0; font-size:12px; color:var(--text-secondary);">
+          Assegna i due interruttori fisici del pedale con <strong>Assegna</strong> (impara sia tasti Bluetooth HID che segnali MIDI). Premi <strong>ESC</strong> per annullare. I comandi vengono disattivati automaticamente mentre scrivi nei campi di testo.
+        </p>
+
+        <div id="pedal-mapping-list" class="pedal-mapping-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-pedal-reset-defaults" class="btn btn-danger">Ripristina Predefiniti</button>
+        <button type="button" id="btn-close-pedal-footer" class="btn is-active">Fatto</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Collapsible Cue Marker Sidebar -->
+  <div id="cue-sidebar-backdrop" aria-hidden="true"></div>
+  <aside id="cue-sidebar" aria-label="Elenco Cue Marker">
+    <div class="cue-sidebar-header">
+      <h2 id="cue-sidebar-title" class="cue-sidebar-title">Cue Marker (0)</h2>
+      <button type="button" id="btn-close-cue-sidebar" class="btn">Chiudi</button>
+    </div>
+    <div id="cue-sidebar-list" class="cue-sidebar-list"></div>
+  </aside>
+
+  <!-- Collapsible Setlist (Scalette) Right Drawer -->
+  <div id="setlist-drawer-backdrop" aria-hidden="true"></div>
+  <aside id="setlist-drawer" aria-label="Gestione Setlist e Brani">
+    <div class="setlist-drawer-header">
+      <h2 class="cue-sidebar-title">Setlist &amp; Scalette</h2>
+      <button type="button" id="btn-close-setlist-drawer" class="btn">Chiudi</button>
+    </div>
+    <div class="setlist-drawer-body">
+      <!-- Setlist Archive Controls -->
+      <div class="drawer-section">
+        <p class="drawer-section-title">Archivio Setlist</p>
+        <div class="drawer-row">
+          <select id="setlist-select" aria-label="Seleziona Setlist attiva"></select>
+        </div>
+        <div class="drawer-row">
+          <button type="button" id="btn-setlist-new" class="btn btn-mini">Nuova</button>
+          <button type="button" id="btn-setlist-rename" class="btn btn-mini">Rinomina</button>
+          <button type="button" id="btn-setlist-duplicate" class="btn btn-mini">Duplica</button>
+          <button type="button" id="btn-setlist-delete" class="btn btn-mini btn-danger">Elimina</button>
+        </div>
+        <div id="setlist-name-form" class="drawer-row hidden">
+          <input type="text" id="setlist-name-input" maxlength="50" placeholder="Nome setlist (es. Concerto Tour 2026)" />
+          <button type="button" id="btn-setlist-name-save" class="btn btn-mini is-active">Salva</button>
+          <button type="button" id="btn-setlist-name-cancel" class="btn btn-mini">Annulla</button>
+        </div>
+        <div class="drawer-row" style="justify-content: space-between;">
+          <button type="button" id="btn-autoswitch-mtc" class="btn btn-mini" style="width: 100%;">
+            Auto-switch da MTC: OFF
+          </button>
+        </div>
+      </div>
+
+      <!-- Backup Export / Import -->
+      <div class="drawer-section">
+        <p class="drawer-section-title">Backup Scalette (.json)</p>
+        <div class="drawer-row">
+          <button type="button" id="btn-export-setlists" class="btn btn-mini" style="flex:1;">Esporta Backup (.json)</button>
+          <button type="button" id="btn-import-setlists" class="btn btn-mini" style="flex:1;">Importa Backup (.json)</button>
+          <input type="file" id="import-setlists-file" accept=".json,application/json" class="hidden" />
+        </div>
+        <div id="setlist-feedback" class="setlist-feedback" aria-live="polite"></div>
+      </div>
+
+      <!-- Add / Edit Song Form -->
+      <div class="drawer-section">
+        <div class="drawer-row" style="justify-content: space-between;">
+          <p class="drawer-section-title" id="song-form-heading">Brani / Scene nella Setlist</p>
+          <button type="button" id="btn-add-song-toggle" class="btn btn-mini is-active">+ Nuovo Brano</button>
+        </div>
+        <div id="song-form-card" class="hidden" style="display:flex; flex-direction:column; gap:8px; padding-top:4px;">
+          <input type="text" id="song-title-input" maxlength="60" placeholder="Titolo brano o scena (es. Scena 1 - Intro)" />
+          <div class="drawer-row">
+            <select id="song-mode-select" aria-label="Modalità brano">
+              <option value="B">Modalità B: Cue Marker</option>
+              <option value="A">Modalità A: Start / End</option>
+              <option value="AUTO">Auto-Scroll Smooth (px/s)</option>
+            </select>
+            <input type="text" id="song-start-input" class="tc-input" value="01:00:00:00" maxlength="11" placeholder="Start TC" aria-label="Start TC brano" />
+            <input type="text" id="song-end-input" class="tc-input" value="01:03:00:00" maxlength="11" placeholder="End TC" aria-label="End TC brano" />
+          </div>
+          <textarea id="song-text-input" class="song-form-textarea" spellcheck="false" placeholder="Testo del copione (puoi includere tag [HH:MM:SS:FF] per la Modalità Marker)..."></textarea>
+          <div class="drawer-row">
+            <button type="button" id="btn-song-save" class="btn btn-mini is-active" style="flex:1;">Salva Brano</button>
+            <button type="button" id="btn-song-cancel" class="btn btn-mini">Annulla</button>
+          </div>
+        </div>
+        <div id="setlist-songs-list" class="setlist-songs-list"></div>
+      </div>
+    </div>
+  </aside>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const STORAGE_KEY = 'mtc_teleprompter_state_v1';
+      const PRESETS_STORAGE_KEY = 'mtc_teleprompter_presets_v1';
+      const SETLISTS_STORAGE_KEY = 'mtc_teleprompter_setlists_v1';
+      const PEDAL_STORAGE_KEY = 'mtc_teleprompter_pedal_2sw_v1';
+
+      const SAMPLE_SCRIPT = `[01:00:00:00] SIGLA INIZIALE — ATTESA INIZIO REGISTRAZIONE
+Benvenuti negli studi di registrazione.
+Verificate la postura e la distanza dal microfono prima del via.
+
+[01:00:08:00] SCENA 1 — INTRODUZIONE
+Oggi raccontiamo una storia fatta di precisione tecnica e ritmo naturale.
+Ogni pausa ha il suo respiro e ogni parola segue esattamente il tempo della colonna sonora.
+
+[01:00:18:00] SECONDA BATTUTA — RITMO COSTANTE
+Quando Steinberg Nuendo invia il segnale MIDI Timecode via USB, il testo scorre davanti ai vostri occhi senza bisogno di un operatore manuale.
+
+[01:00:28:00] TERZA BATTUTA — SCRUBBING E RIPRESE
+Se la regia riparte da un punto precedente o salta in avanti sulla timeline, il teleprompter si allinea istantaneamente alla riga corrispondente.
+
+[01:00:38:00] CHIUSURA — ULTIMA BATTUTA
+Grazie a tutti, buona registrazione e buon lavoro in studio.`;
+
+      const DEFAULT_PRESETS = [
+        {
+          name: 'Registrazione',
+          scriptText: SAMPLE_SCRIPT
+        },
+        {
+          name: 'Prove',
+          scriptText: `[01:00:00:00] PROVA GENERALE — CHECK AUDIO E RITMO
+Controllo livelli microfono e distanza dal leggio.
+
+[01:00:10:00] BLOCCO PROVA A
+Lettura di riferimento per verificare il sincronismo con la traccia guida di Nuendo.
+
+[01:00:22:00] BLOCCO PROVA B
+Verifica di locate e ripartenza rapida sulla battuta centrale.`
+        },
+        {
+          name: 'Diretta',
+          scriptText: `[01:00:00:00] APERTURA DIRETTA
+Buonasera a tutti, siamo in onda dagli studi centrali.
+
+[01:00:12:00] LANCIO SERVIZIO PRINCIPALE
+Passiamo subito al primo collegamento della serata.
+
+[01:00:25:00] CHIUSURA E SALUTI
+Grazie per averci seguito, appuntamento alla prossima puntata.`
+        }
+      ];
+
+      const DEFAULT_STATE = {
+        scriptText: SAMPLE_SCRIPT,
+        syncMode: 'B', // 'A' = Start/End, 'B' = Cue Markers, 'AUTO' = Auto-Scroll Smooth (px/s)
+        startTC: '01:00:00:00',
+        endTC: '01:00:45:00',
+        fpsSetting: '25', // 'auto' | '24' | '25' | '29.97' | '30'
+        fontSize: 52,
+        sideMargin: 10,
+        lineHeight: 1.48,
+        textAlign: 'left',
+        mirrored: false,
+        invertedColors: false,
+        autoHide: true,
+        selectedPortName: '',
+        referenceBpm: 120,
+        autoScrollSpeedPx: 45
+      };
+
+      let state = loadState();
+
+      // DOM Elements
+      const stageViewport = document.getElementById('stage-viewport');
+      const stageMirrorWrap = document.getElementById('stage-mirror-wrap');
+      const scriptTrack = document.getElementById('script-track');
+      const topBar = document.getElementById('top-bar');
+      const bottomBar = document.getElementById('bottom-bar');
+      const hudRevealHint = document.getElementById('hud-reveal-hint');
+      const offlineBanner = document.getElementById('offline-banner');
+
+      const mtcLed = document.getElementById('mtc-led');
+      const mtcBpmIndicator = document.getElementById('mtc-bpm-indicator');
+      const mtcBpmValue = document.getElementById('mtc-bpm-value');
+      const mtcBpmSub = document.getElementById('mtc-bpm-sub');
+      const tcDisplay = document.getElementById('tc-display');
+      const fpsReadout = document.getElementById('fps-readout');
+      const midiStatusText = document.getElementById('midi-status-text');
+      const activeSongMeta = document.getElementById('active-song-meta');
+      const wakeLockStatus = document.getElementById('wakelock-status');
+
+      const midiPortSelect = document.getElementById('midi-port-select');
+      const btnRefreshMidi = document.getElementById('btn-refresh-midi');
+      const modeBtnA = document.getElementById('mode-btn-a');
+      const modeBtnB = document.getElementById('mode-btn-b');
+      const modeBtnAuto = document.getElementById('mode-btn-auto');
+      const modeAInputs = document.getElementById('mode-a-inputs');
+      const modeBInfo = document.getElementById('mode-b-info');
+      const modeAutoControls = document.getElementById('mode-auto-controls');
+      const btnAutoPlay = document.getElementById('btn-auto-play');
+      const btnAutoReset = document.getElementById('btn-auto-reset');
+      const autoSpeedSlider = document.getElementById('auto-speed-slider');
+      const autoSpeedInput = document.getElementById('auto-speed-input');
+      const cueCountText = document.getElementById('cue-count-text');
+      const inputStartTC = document.getElementById('input-start-tc');
+      const inputEndTC = document.getElementById('input-end-tc');
+      const fpsSelect = document.getElementById('fps-select');
+
+      const fontSizeSlider = document.getElementById('font-size-slider');
+      const fontSizeVal = document.getElementById('font-size-val');
+      const marginSlider = document.getElementById('margin-slider');
+      const marginVal = document.getElementById('margin-val');
+      const lineHeightSlider = document.getElementById('line-height-slider');
+      const lineHeightVal = document.getElementById('line-height-val');
+      const alignBtnLeft = document.getElementById('align-btn-left');
+      const alignBtnCenter = document.getElementById('align-btn-center');
+      const alignBtnJustify = document.getElementById('align-btn-justify');
+      const alignButtons = [alignBtnLeft, alignBtnCenter, alignBtnJustify];
+
+      const btnMirror = document.getElementById('btn-mirror');
+      const btnInvert = document.getElementById('btn-invert');
+      const btnFullscreen = document.getElementById('btn-fullscreen');
+      const btnAutohide = document.getElementById('btn-autohide');
+      const btnInstall = document.getElementById('btn-install');
+
+      const btnCueSidebar = document.getElementById('btn-cue-sidebar');
+      const btnCueSidebarLabel = document.getElementById('btn-cue-sidebar-label');
+      const cueSidebar = document.getElementById('cue-sidebar');
+      const cueSidebarBackdrop = document.getElementById('cue-sidebar-backdrop');
+      const cueSidebarTitle = document.getElementById('cue-sidebar-title');
+      const cueSidebarList = document.getElementById('cue-sidebar-list');
+      const btnCloseCueSidebar = document.getElementById('btn-close-cue-sidebar');
+
+      const btnPrevSong = document.getElementById('btn-prev-song');
+      const btnNextSong = document.getElementById('btn-next-song');
+      const activeSongIndicator = document.getElementById('active-song-indicator');
+      const btnSetlistDrawer = document.getElementById('btn-setlist-drawer');
+      const setlistDrawer = document.getElementById('setlist-drawer');
+      const setlistDrawerBackdrop = document.getElementById('setlist-drawer-backdrop');
+      const btnCloseSetlistDrawer = document.getElementById('btn-close-setlist-drawer');
+      const setlistSelect = document.getElementById('setlist-select');
+      const btnSetlistNew = document.getElementById('btn-setlist-new');
+      const btnSetlistRename = document.getElementById('btn-setlist-rename');
+      const btnSetlistDuplicate = document.getElementById('btn-setlist-duplicate');
+      const btnSetlistDelete = document.getElementById('btn-setlist-delete');
+      const setlistNameForm = document.getElementById('setlist-name-form');
+      const setlistNameInput = document.getElementById('setlist-name-input');
+      const btnSetlistNameSave = document.getElementById('btn-setlist-name-save');
+      const btnSetlistNameCancel = document.getElementById('btn-setlist-name-cancel');
+      const btnAutoswitchMtc = document.getElementById('btn-autoswitch-mtc');
+      const btnExportSetlists = document.getElementById('btn-export-setlists');
+      const btnImportSetlists = document.getElementById('btn-import-setlists');
+      const importSetlistsFile = document.getElementById('import-setlists-file');
+      const setlistFeedback = document.getElementById('setlist-feedback');
+      const btnAddSongToggle = document.getElementById('btn-add-song-toggle');
+      const songFormCard = document.getElementById('song-form-card');
+      const songTitleInput = document.getElementById('song-title-input');
+      const songModeSelect = document.getElementById('song-mode-select');
+      const songStartInput = document.getElementById('song-start-input');
+      const songEndInput = document.getElementById('song-end-input');
+      const songTextInput = document.getElementById('song-text-input');
+      const btnSongSave = document.getElementById('btn-song-save');
+      const btnSongCancel = document.getElementById('btn-song-cancel');
+      const setlistSongsList = document.getElementById('setlist-songs-list');
+
+      const simPanel = document.getElementById('sim-panel');
+      const btnSimToggle = document.getElementById('btn-sim-toggle');
+      const btnSimPlay = document.getElementById('btn-sim-play');
+      const btnSimStop = document.getElementById('btn-sim-stop');
+      const btnSimReset = document.getElementById('btn-sim-reset');
+      const simJumpInput = document.getElementById('sim-jump-tc');
+      const btnSimJump = document.getElementById('btn-sim-jump');
+      const simSlider = document.getElementById('sim-slider');
+      const simRangeLabel = document.getElementById('sim-range-label');
+
+      const editorModal = document.getElementById('editor-modal');
+      const btnEditor = document.getElementById('btn-editor');
+      const btnCloseEditor = document.getElementById('btn-close-editor');
+      const btnSaveEditor = document.getElementById('btn-save-editor');
+      const btnLoadSample = document.getElementById('btn-load-sample');
+      const btnClearScript = document.getElementById('btn-clear-script');
+      const scriptTextarea = document.getElementById('script-textarea');
+      const presetSelect = document.getElementById('preset-select');
+      const btnPresetLoad = document.getElementById('btn-preset-load');
+      const btnPresetDelete = document.getElementById('btn-preset-delete');
+      const presetNameInput = document.getElementById('preset-name-input');
+      const btnPresetSave = document.getElementById('btn-preset-save');
+      const presetFeedback = document.getElementById('preset-feedback');
+
+      const helpModal = document.getElementById('help-modal');
+      const btnHelp = document.getElementById('btn-help');
+      const btnCloseHelp = document.getElementById('btn-close-help');
+      const btnCloseHelpFooter = document.getElementById('btn-close-help-footer');
+      const btnExportMtcLog = document.getElementById('btn-export-mtc-log');
+      const iosInstallNote = document.getElementById('ios-install-note');
+
+      const pedalModal = document.getElementById('pedal-modal');
+      const btnPedalModal = document.getElementById('btn-pedal-modal');
+      const btnClosePedal = document.getElementById('btn-close-pedal');
+      const btnClosePedalFooter = document.getElementById('btn-close-pedal-footer');
+      const btnPedalResetDefaults = document.getElementById('btn-pedal-reset-defaults');
+      const pedalMappingList = document.getElementById('pedal-mapping-list');
+      const pedalLastSignal = document.getElementById('pedal-last-signal');
+      const pedalMidiBanner = document.getElementById('pedal-midi-banner');
+      const pedalScrollSpeedSlider = document.getElementById('pedal-scroll-speed-slider');
+      const pedalScrollSpeedInput = document.getElementById('pedal-scroll-speed-input');
+      const pedalFastSpeedSlider = document.getElementById('pedal-fast-speed-slider');
+      const pedalFastSpeedInput = document.getElementById('pedal-fast-speed-input');
+      const pedalToast = document.getElementById('pedal-toast');
+
+      // Runtime State
+      let midiAccess = null;
+      let activeInput = null;
+      let detectedMtcFps = 25;
+
+      // MTC Quarter Frame Assembly Registers
+      const qfBytes = [0, 0, 0, 0, 0, 0, 0, 0];
+      let qfMask = 0;
+      let lastQfPiece = -1;
+      let qfDirection = 1; // +1 forward, -1 reverse
+
+      // Current Authoritative Timecode
+      let currentTimeSec = 3600; // 01:00:00:00
+      let prevTimeSec = 3600;
+      let lastMtcActivityMs = 0;
+      let mtcPulseToggle = false;
+
+      // MTC Flow Velocity & Tempo (BPM) Estimator
+      const mtcRateSamples = []; // [{ wallMs, mtcSec }]
+      let smoothedSpeedRatio = 1;
+      const midiClockTimestamps = []; // [wallMs] for optional 0xF8 MIDI Clock
+      let lastMidiClockMs = 0;
+      let measuredClockBpm = 0;
+      let lastClockLogMs = 0;
+      const tapTempoTimestamps = [];
+      let tapTempoFeedbackUntilMs = 0;
+      let lastBpmDisplayKey = '';
+
+      // MTC Debug Log (last 100 received MIDI/MTC messages)
+      const MAX_MTC_LOG = 100;
+      const mtcLogBuffer = [];
+
+      // Scroll Physics
+      let currentScrollY = 0;
+      let targetScrollY = 0;
+      let maxScrollY = 0;
+      let cuePoints = []; // [{ sec, y, rawTC }]
+      let hudVisible = true;
+      let hudHideTimer = null;
+
+      // Simulator State
+      let simPlaying = false;
+      let simLastFrameMs = 0;
+      let simCurrentSec = 3600;
+      let simDragging = false;
+
+      // Auto-Scroll Smooth State (independent from MTC)
+      let autoScrollPlaying = false;
+      let autoScrollLastFrameMs = 0;
+
+      // 2-Switch Pedal (LEKATO) Configuration & Gesture State
+      const HOLD_THRESHOLD_MS = 400;
+      const DOUBLE_TAP_WINDOW_MS = 350;
+
+      const PEDAL_SWITCHES = [
+        {
+          id: 'left',
+          title: 'Pedale Sinistro',
+          gestures: [
+            { tag: 'Tocco singolo', text: 'Riporta lo scorrimento all\'inizio del brano corrente' },
+            { tag: 'Doppio tocco', text: 'Torna al Brano precedente nella setlist (≤ 350ms)' },
+            { tag: 'Tenuta (>400ms)', text: 'Indietro veloce finché rimane premuto' }
+          ]
+        },
+        {
+          id: 'right',
+          title: 'Pedale Destro',
+          gestures: [
+            { tag: 'Tocco singolo', text: 'Play / Stop scorrimento manuale fluido' },
+            { tag: 'Doppio tocco', text: 'Passa al Brano successivo nella setlist (≤ 350ms)' },
+            { tag: 'Tenuta (>400ms)', text: 'Avanza veloce finché rimane premuto' }
+          ]
+        }
+      ];
+
+      function createDefaultPedalConfig() {
+        return {
+          fastScrollSpeedPx: 340,
+          bindings: {
+            left: {
+              kind: 'key',
+              code: 'PageUp',
+              key: 'PageUp',
+              altCodes: ['ArrowLeft'],
+              altKeys: ['ArrowLeft'],
+              label: 'PageUp / ArrowLeft'
+            },
+            right: {
+              kind: 'key',
+              code: 'PageDown',
+              key: 'PageDown',
+              altCodes: ['ArrowRight'],
+              altKeys: ['ArrowRight'],
+              label: 'PageDown / ArrowRight'
+            }
+          }
+        };
+      }
+
+      function normalizePedalBinding(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+        if (raw.kind === 'key') {
+          const code = String(raw.code || '');
+          const key = String(raw.key || '');
+          if (!code && !key) return null;
+          return {
+            kind: 'key',
+            code,
+            key,
+            altCodes: Array.isArray(raw.altCodes) ? raw.altCodes.map(String) : [],
+            altKeys: Array.isArray(raw.altKeys) ? raw.altKeys.map(String) : [],
+            label: String(raw.label || `Tasto: ${code || key}`)
+          };
+        }
+        if (raw.kind === 'midi') {
+          const msgType = raw.msgType === 'cc' ? 'cc' : (raw.msgType === 'pc' ? 'pc' : 'note');
+          const channel = Math.max(1, Math.min(16, Number(raw.channel) || 1));
+          const number = Math.max(0, Math.min(127, Number(raw.number) || 0));
+          const pressHigh = raw.pressHigh !== false;
+          const prefix = msgType === 'cc' ? 'CC' : (msgType === 'pc' ? 'PC' : 'Note');
+          return {
+            kind: 'midi',
+            msgType,
+            channel,
+            number,
+            pressHigh,
+            label: String(raw.label || `MIDI ${prefix} ${number} (Ch ${channel})`)
+          };
+        }
+        return null;
+      }
+
+      function normalizePedalConfig(raw) {
+        const defaults = createDefaultPedalConfig();
+        if (!raw || typeof raw !== 'object') return defaults;
+        const fastScrollSpeedPx = Math.max(20, Math.min(1500, Number(raw.fastScrollSpeedPx) || defaults.fastScrollSpeedPx));
+        const rawBindings = (raw.bindings && typeof raw.bindings === 'object') ? raw.bindings : {};
+        const bindings = {};
+        PEDAL_SWITCHES.forEach((sw) => {
+          if (Object.prototype.hasOwnProperty.call(rawBindings, sw.id)) {
+            bindings[sw.id] = normalizePedalBinding(rawBindings[sw.id]);
+          } else {
+            bindings[sw.id] = defaults.bindings[sw.id];
+          }
+        });
+        return { fastScrollSpeedPx, bindings };
+      }
+
+      function loadPedalConfig() {
+        try {
+          const raw = localStorage.getItem(PEDAL_STORAGE_KEY);
+          if (!raw) {
+            const initial = createDefaultPedalConfig();
+            localStorage.setItem(PEDAL_STORAGE_KEY, JSON.stringify(initial));
+            return initial;
+          }
+          return normalizePedalConfig(JSON.parse(raw));
+        } catch (err) {
+          return createDefaultPedalConfig();
+        }
+      }
+
+      function savePedalConfig() {
+        try {
+          localStorage.setItem(PEDAL_STORAGE_KEY, JSON.stringify(pedalConfig));
+        } catch (err) {
+          // Ignore quota errors
+        }
+      }
+
+      let pedalConfig = loadPedalConfig();
+      let learningSwitchId = null;
+      let pedalHoldDir = 0; // -1 = rewind (left hold), 0 = idle, +1 = fast forward (right hold)
+      let pedalHoldLastMs = 0;
+      let pedalToastTimer = null;
+      const switchRuntime = {
+        left: { isDown: false, didHold: false, consumedDoubleTap: false, holdTimer: null, tapTimer: null },
+        right: { isDown: false, didHold: false, consumedDoubleTap: false, holdTimer: null, tapTimer: null }
+      };
+      const attachedPedalMidiInputs = new WeakSet();
+
+      // Wake Lock & PWA Install
+      let wakeLockSentinel = null;
+      let deferredInstallPrompt = null;
+
+      /* ---------------- Persistence ---------------- */
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return Object.assign({}, DEFAULT_STATE);
+          const parsed = JSON.parse(raw);
+          const merged = Object.assign({}, DEFAULT_STATE, parsed);
+          if (merged.textAlign !== 'left' && merged.textAlign !== 'center' && merged.textAlign !== 'justify') {
+            merged.textAlign = 'left';
+          }
+          return merged;
+        } catch (err) {
+          return Object.assign({}, DEFAULT_STATE);
+        }
+      }
+
+      function saveState() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (err) {
+          // Ignore quota errors
+        }
+      }
+
+      /* ---------------- Timecode Math ---------------- */
+      function getEffectiveFpsMode() {
+        return state.fpsSetting === 'auto' ? detectedMtcFps : Number(state.fpsSetting);
+      }
+
+      function getNominalFpsInt(fpsMode) {
+        if (fpsMode === 24) return 24;
+        if (fpsMode === 25) return 25;
+        return 30; // Both 29.97 DF and 30 NDF use 30 nominal frames/sec
+      }
+
+      function getExactFpsRate(fpsMode) {
+        if (fpsMode === 29.97) return 30000 / 1001;
+        return fpsMode;
+      }
+
+      function parseTC(str) {
+        const clean = String(str || '').trim();
+        let match = clean.match(/^(\d{1,2}):(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+        if (!match) {
+          const digits = clean.replace(/\D/g, '');
+          if (digits.length === 8) {
+            match = [clean, digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 6), digits.slice(6, 8)];
+          }
+        }
+        if (!match) return null;
+        return {
+          h: Math.min(23, Math.max(0, parseInt(match[1], 10))),
+          m: Math.min(59, Math.max(0, parseInt(match[2], 10))),
+          s: Math.min(59, Math.max(0, parseInt(match[3], 10))),
+          f: Math.min(29, Math.max(0, parseInt(match[4], 10)))
+        };
+      }
+
+      function formatTC(h, m, s, f) {
+        const p = (n) => String(Math.max(0, Math.floor(n))).padStart(2, '0');
+        return `${p(h)}:${p(m)}:${p(s)}:${p(f)}`;
+      }
+
+      function tcObjToFrames(tc, fpsMode) {
+        const fpsInt = getNominalFpsInt(fpsMode);
+        const fClamped = Math.min(tc.f, fpsInt - 1);
+        if (fpsMode === 29.97) {
+          const totalMinutes = tc.h * 60 + tc.m;
+          const dropFrames = 2 * (totalMinutes - Math.floor(totalMinutes / 10));
+          return (tc.h * 3600 + tc.m * 60 + tc.s) * 30 + fClamped - dropFrames;
+        }
+        return (tc.h * 3600 + tc.m * 60 + tc.s) * fpsInt + fClamped;
+      }
+
+      function framesToSeconds(totalFrames, fpsMode) {
+        return totalFrames / getExactFpsRate(fpsMode);
+      }
+
+      function tcStrToSeconds(str, fpsMode) {
+        const tc = parseTC(str);
+        if (!tc) return null;
+        return framesToSeconds(tcObjToFrames(tc, fpsMode), fpsMode);
+      }
+
+      function secondsToTCString(seconds, fpsMode) {
+        const safeSec = Math.max(0, seconds);
+        const exactRate = getExactFpsRate(fpsMode);
+        let totalFrames = Math.round(safeSec * exactRate);
+
+        if (fpsMode === 29.97) {
+          const framesPer10Min = 17982;
+          const framesPerMin = 1798;
+          const d = Math.floor(totalFrames / framesPer10Min);
+          let m = totalFrames % framesPer10Min;
+          if (m >= 2) {
+            totalFrames += 18 * d + 2 * Math.floor((m - 2) / framesPerMin);
+          } else {
+            totalFrames += 18 * d;
+          }
+          const f = totalFrames % 30;
+          const s = Math.floor(totalFrames / 30) % 60;
+          const min = Math.floor(totalFrames / 1800) % 60;
+          const h = Math.floor(totalFrames / 108000) % 24;
+          return formatTC(h, min, s, f);
+        }
+
+        const fpsInt = getNominalFpsInt(fpsMode);
+        const f = totalFrames % fpsInt;
+        const totalSec = Math.floor(totalFrames / fpsInt);
+        const s = totalSec % 60;
+        const m = Math.floor(totalSec / 60) % 60;
+        const h = Math.floor(totalSec / 3600) % 24;
+        return formatTC(h, m, s, f);
+      }
+
+      function rateCodeToFps(code) {
+        switch (code & 0x03) {
+          case 0: return 24;
+          case 1: return 25;
+          case 2: return 29.97;
+          case 3: return 30;
+          default: return 25;
+        }
+      }
+
+      /* ---------------- MTC Decoder (Web MIDI API) ---------------- */
+      function recordMtcRateSample(wallMs, mtcSec, isLocateJump) {
+        if (isLocateJump) {
+          mtcRateSamples.length = 0;
+          smoothedSpeedRatio = 1;
+          mtcRateSamples.push({ wallMs, mtcSec });
+          return;
+        }
+        const prev = mtcRateSamples.length > 0 ? mtcRateSamples[mtcRateSamples.length - 1] : null;
+        if (prev) {
+          const dtWall = wallMs - prev.wallMs;
+          const dtMtc = Math.abs(mtcSec - prev.mtcSec);
+          // Reset window on pauses or locate jumps
+          if (dtWall > 650 || dtMtc > 0.28) {
+            mtcRateSamples.length = 0;
+          }
+        }
+        mtcRateSamples.push({ wallMs, mtcSec });
+        while (mtcRateSamples.length > 2 && (wallMs - mtcRateSamples[0].wallMs) > 1300) {
+          mtcRateSamples.shift();
+        }
+        if (mtcRateSamples.length >= 4) {
+          const first = mtcRateSamples[0];
+          const spanWallSec = (wallMs - first.wallMs) / 1000;
+          const spanMtcSec = Math.abs(mtcSec - first.mtcSec);
+          if (spanWallSec >= 0.18 && spanMtcSec > 0) {
+            const rawRatio = Math.max(0.1, Math.min(4.0, spanMtcSec / spanWallSec));
+            smoothedSpeedRatio = smoothedSpeedRatio * 0.72 + rawRatio * 0.28;
+          }
+        }
+      }
+
+      function setLiveTimecode(newSec, displayTCStr, isLocateJump) {
+        const nowMs = performance.now();
+        prevTimeSec = currentTimeSec;
+        currentTimeSec = newSec;
+        tcDisplay.textContent = displayTCStr;
+        lastMtcActivityMs = nowMs;
+
+        const jumpDelta = Math.abs(newSec - prevTimeSec);
+        recordMtcRateSample(nowMs, newSec, Boolean(isLocateJump) || jumpDelta > 0.28);
+
+        if (!isAutoSwitching && setlistStore && setlistStore.autoSwitchMtc) {
+          checkAutoSwitchFromMtc(newSec);
+        }
+
+        if (isLocateJump || jumpDelta > 0.28) {
+          updateTargetScroll(true);
+        } else {
+          updateTargetScroll(false);
+        }
+        updateActiveCueHighlight();
+      }
+
+      function formatBytesHex(data) {
+        return Array.from(data, (b) => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+      }
+
+      function pushMtcLog(kind, rawBytes, detail) {
+        const now = new Date();
+        const ts = now.toTimeString().slice(0, 8) + '.' + String(now.getMilliseconds()).padStart(3, '0');
+        mtcLogBuffer.push({
+          ts,
+          kind,
+          hex: formatBytesHex(rawBytes),
+          detail
+        });
+        if (mtcLogBuffer.length > MAX_MTC_LOG) {
+          mtcLogBuffer.shift();
+        }
+      }
+
+      function updateExportLogButtonLabel() {
+        btnExportMtcLog.textContent = `Esporta Log MTC (${mtcLogBuffer.length}/${MAX_MTC_LOG})`;
+      }
+
+      function exportMtcLog() {
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+        const effFps = getEffectiveFpsMode();
+
+        const headerLines = [
+          '=== MTC TELEPROMPTER STUDIO — DEBUG LOG ===',
+          `Data export: ${now.toISOString()}`,
+          `Porta MIDI attiva: ${activeInput ? (activeInput.name || activeInput.id) : 'Nessuna'} (${midiStatusText.textContent})`,
+          `FPS impostato: ${state.fpsSetting} | FPS rilevato MTC: ${detectedMtcFps} | FPS effettivo: ${effFps}`,
+          `Modalita Sync: ${state.syncMode} | Start TC: ${state.startTC} | End TC: ${state.endTC} | Cue rilevati: ${cuePoints.length}`,
+          `Timecode corrente: ${tcDisplay.textContent}`,
+          `Messaggi registrati (max ${MAX_MTC_LOG}): ${mtcLogBuffer.length}`,
+          '============================================',
+          ''
+        ];
+
+        const bodyLines = mtcLogBuffer.length === 0
+          ? ['Nessun messaggio MIDI/MTC ricevuto dal dispositivo USB in questa sessione.']
+          : mtcLogBuffer.map((entry, idx) =>
+              `#${String(idx + 1).padStart(3, '0')} [${entry.ts}] ${entry.kind.padEnd(10, ' ')} | HEX: ${entry.hex.padEnd(30, ' ')} | ${entry.detail}`
+            );
+
+        const content = headerLines.concat(bodyLines).join('\n') + '\n';
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `mtc-debug-log-${stamp}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+        btnExportMtcLog.textContent = 'Log esportato!';
+        setTimeout(updateExportLogButtonLabel, 1500);
+      }
+
+      function handleMidiMessage(event) {
+        const data = event.data;
+        if (!data || data.length === 0) return;
+
+        const status = data[0];
+
+        // 1. MTC Quarter Frame (0xF1 <data>)
+        if (status === 0xF1 && data.length >= 2) {
+          const val = data[1];
+          const piece = (val >> 4) & 0x07;
+          const nibble = val & 0x0F;
+
+          if (lastQfPiece !== -1) {
+            if (piece === (lastQfPiece + 1) % 8) qfDirection = 1;
+            else if (piece === (lastQfPiece + 7) % 8) qfDirection = -1;
+          }
+          lastQfPiece = piece;
+          qfBytes[piece] = nibble;
+          qfMask |= (1 << piece);
+
+          // Toggle LED pulse state on every frame boundary (piece 0 or 4)
+          if (piece === 0 || piece === 4) {
+            mtcPulseToggle = !mtcPulseToggle;
+          }
+
+          if (qfMask === 0xFF) {
+            const frames = (qfBytes[0] & 0x0F) | ((qfBytes[1] & 0x01) << 4);
+            const seconds = (qfBytes[2] & 0x0F) | ((qfBytes[3] & 0x03) << 4);
+            const minutes = (qfBytes[4] & 0x0F) | ((qfBytes[5] & 0x03) << 4);
+            const hours = (qfBytes[6] & 0x0F) | ((qfBytes[7] & 0x01) << 4);
+            const rateCode = (qfBytes[7] >> 1) & 0x03;
+
+            const mtcFps = rateCodeToFps(rateCode);
+            if (mtcFps !== detectedMtcFps) {
+              detectedMtcFps = mtcFps;
+              updateFpsReadout();
+              recalcCueTimes();
+            }
+
+            const fpsMode = getEffectiveFpsMode();
+            const baseFrames = tcObjToFrames({ h: hours, m: minutes, s: seconds, f: frames }, fpsMode);
+
+            // In MTC spec, QF0..QF7 describe the frame at QF0.
+            // Sub-frame offset within the 2-frame (8 QF) cycle:
+            const subFrames = qfDirection >= 0 ? (piece * 0.25) : ((piece - 7) * 0.25);
+            const exactFrames = baseFrames + subFrames;
+            const exactSec = framesToSeconds(exactFrames, fpsMode);
+
+            // Update display cleanly on completed cycle or sub-frame advance
+            const dispStr = secondsToTCString(exactSec, fpsMode);
+            setLiveTimecode(exactSec, dispStr, false);
+            pushMtcLog(
+              'MTC_QF',
+              data,
+              `QF=${piece} nib=${nibble} dir=${qfDirection > 0 ? 'FWD' : 'REV'} TC=${dispStr} fps=${mtcFps} scrollY=${Math.round(targetScrollY)}`
+            );
+          } else {
+            lastMtcActivityMs = performance.now();
+            pushMtcLog('MTC_QF', data, `QF=${piece} nib=${nibble} (allineamento ciclo mask=0x${qfMask.toString(16)})`);
+          }
+          return;
+        }
+
+        // 2. MTC Full Frame SysEx: F0 7F <dev> 01 01 <hr> <mn> <sc> <fr> F7
+        if (
+          status === 0xF0 &&
+          data.length >= 10 &&
+          data[1] === 0x7F &&
+          data[3] === 0x01 &&
+          data[4] === 0x01 &&
+          data[data.length - 1] === 0xF7
+        ) {
+          const hrByte = data[5];
+          const rateCode = (hrByte >> 5) & 0x03;
+          const hours = hrByte & 0x1F;
+          const minutes = data[6] & 0x3F;
+          const seconds = data[7] & 0x3F;
+          const frames = data[8] & 0x1F;
+
+          const mtcFps = rateCodeToFps(rateCode);
+          if (mtcFps !== detectedMtcFps) {
+            detectedMtcFps = mtcFps;
+            updateFpsReadout();
+            recalcCueTimes();
+          }
+
+          // Reset quarter-frame accumulator on Locate/Full Frame
+          qfMask = 0;
+          lastQfPiece = -1;
+
+          const fpsMode = getEffectiveFpsMode();
+          const totalFrames = tcObjToFrames({ h: hours, m: minutes, s: seconds, f: frames }, fpsMode);
+          const newSec = framesToSeconds(totalFrames, fpsMode);
+          const dispStr = formatTC(hours, minutes, seconds, frames);
+
+          // Full frame is an explicit Locate / Scrub jump -> instant snap
+          setLiveTimecode(newSec, dispStr, true);
+          pushMtcLog(
+            'MTC_FULL',
+            data,
+            `LOCATE TC=${dispStr} fps=${mtcFps} scrollY=${Math.round(targetScrollY)}`
+          );
+          return;
+        }
+
+        // 3. MIDI Clock (0xF8 - 24 PPQN) for direct BPM tracking when Nuendo sends Clock + MTC
+        if (status === 0xF8) {
+          const nowMs = performance.now();
+          if (nowMs - lastMidiClockMs > 600) {
+            midiClockTimestamps.length = 0;
+          }
+          lastMidiClockMs = nowMs;
+          midiClockTimestamps.push(nowMs);
+          if (midiClockTimestamps.length > 49) {
+            midiClockTimestamps.shift();
+          }
+          if (midiClockTimestamps.length >= 12) {
+            const spanMs = nowMs - midiClockTimestamps[0];
+            const intervals = midiClockTimestamps.length - 1;
+            const avgTickSec = (spanMs / intervals) / 1000;
+            if (avgTickSec > 0) {
+              const rawClockBpm = 60 / (avgTickSec * 24);
+              if (rawClockBpm >= 25 && rawClockBpm <= 320) {
+                measuredClockBpm = measuredClockBpm > 0
+                  ? (measuredClockBpm * 0.8 + rawClockBpm * 0.2)
+                  : rawClockBpm;
+              }
+            }
+          }
+          if (nowMs - lastClockLogMs > 2000) {
+            lastClockLogMs = nowMs;
+            const bpmTxt = measuredClockBpm > 0 ? ` (~${measuredClockBpm.toFixed(1)} BPM)` : '';
+            pushMtcLog('MIDI_OTHER', data, `MIDI Clock (0xF8)${bpmTxt}`);
+          }
+          return;
+        }
+
+        // 4. Log non-MTC MIDI messages (excluding active sensing 0xFE spam) for Nuendo diagnostics
+        if (status !== 0xFE) {
+          pushMtcLog('MIDI_OTHER', data, `Status=0x${status.toString(16).toUpperCase()}`);
+        }
+      }
+
+      async function initMidi() {
+        if (!('requestMIDIAccess' in navigator)) {
+          midiStatusText.textContent = 'Web MIDI non supportato (usa Chrome)';
+          return;
+        }
+        try {
+          midiAccess = await navigator.requestMIDIAccess({ sysex: true });
+          midiStatusText.textContent = 'MIDI + SysEx pronti';
+        } catch (err) {
+          try {
+            midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+            midiStatusText.textContent = 'MIDI pronto (senza SysEx)';
+          } catch (err2) {
+            midiStatusText.textContent = 'Accesso MIDI negato';
+            return;
+          }
+        }
+        midiAccess.onstatechange = () => populateMidiPorts();
+        populateMidiPorts();
+      }
+
+      function populateMidiPorts() {
+        if (!midiAccess) return;
+        const inputs = Array.from(midiAccess.inputs.values());
+        const currentSelectedId = midiPortSelect.value;
+
+        midiPortSelect.innerHTML = '';
+        if (inputs.length === 0) {
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = '-- Nessuna porta MIDI USB --';
+          midiPortSelect.appendChild(opt);
+          detachActiveInput();
+          midiStatusText.textContent = 'Nessuna porta MIDI';
+          return;
+        }
+
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '-- Seleziona porta MIDI --';
+        midiPortSelect.appendChild(placeholder);
+
+        let autoMatchId = '';
+        inputs.forEach((port) => {
+          attachPedalMidiListener(port);
+          const opt = document.createElement('option');
+          opt.value = port.id;
+          const label = port.name || port.manufacturer || `MIDI In (${port.id})`;
+          opt.textContent = label;
+          midiPortSelect.appendChild(opt);
+
+          if (port.id === currentSelectedId) autoMatchId = port.id;
+          else if (!autoMatchId && state.selectedPortName && label === state.selectedPortName) {
+            autoMatchId = port.id;
+          }
+        });
+
+        updatePedalMidiBanner(inputs.length);
+
+        // If only 1 real MIDI port is connected and nothing selected yet, select it automatically
+        if (!autoMatchId && inputs.length === 1) {
+          autoMatchId = inputs[0].id;
+        }
+
+        if (autoMatchId) {
+          midiPortSelect.value = autoMatchId;
+          bindMidiInput(autoMatchId);
+        } else {
+          detachActiveInput();
+          midiStatusText.textContent = `${inputs.length} porte disponibili`;
+        }
+      }
+
+      function updatePedalMidiBanner(portCount) {
+        if (!pedalMidiBanner) return;
+        const count = typeof portCount === 'number'
+          ? portCount
+          : (midiAccess ? midiAccess.inputs.size : 0);
+        pedalMidiBanner.textContent = count > 0
+          ? `Tastiera Bluetooth HID + ${count} ${count === 1 ? 'porta MIDI attiva' : 'porte MIDI attive'}`
+          : 'Tastiera Bluetooth HID pronta (nessuna porta MIDI collegata)';
+      }
+
+      function attachPedalMidiListener(port) {
+        if (!port || attachedPedalMidiInputs.has(port)) return;
+        attachedPedalMidiInputs.add(port);
+        port.addEventListener('midimessage', handlePedalMidiMessage);
+      }
+
+      function detachActiveInput() {
+        if (activeInput) {
+          activeInput.onmidimessage = null;
+          activeInput = null;
+        }
+      }
+
+      function bindMidiInput(portId) {
+        detachActiveInput();
+        if (!midiAccess || !portId) {
+          midiStatusText.textContent = 'Porta non selezionata';
+          return;
+        }
+        const port = midiAccess.inputs.get(portId);
+        if (!port) {
+          midiStatusText.textContent = 'Porta scollegata';
+          return;
+        }
+        activeInput = port;
+        activeInput.onmidimessage = handleMidiMessage;
+        const label = port.name || port.manufacturer || port.id;
+        state.selectedPortName = label;
+        saveState();
+        midiStatusText.textContent = `In ascolto: ${label}`;
+      }
+
+      /* ---------------- Script Rendering & Cue Parsing ---------------- */
+      const CUE_REGEX = /\[(\d{1,2}:\d{2}:\d{2}:\d{2})\]/g;
+
+      function renderScript() {
+        const lines = state.scriptText.split(/\r?\n/);
+        scriptTrack.innerHTML = '';
+
+        const halfH = Math.round(stageViewport.clientHeight / 2);
+        scriptTrack.style.paddingTop = `${halfH}px`;
+        scriptTrack.style.paddingBottom = `${halfH}px`;
+
+        lines.forEach((lineText) => {
+          const p = document.createElement('p');
+          p.className = 'script-line';
+
+          if (!lineText.trim()) {
+            p.classList.add('is-empty');
+            scriptTrack.appendChild(p);
+            return;
+          }
+
+          CUE_REGEX.lastIndex = 0;
+          let lastIndex = 0;
+          let firstCueInLine = null;
+          let match;
+
+          while ((match = CUE_REGEX.exec(lineText)) !== null) {
+            if (match.index > lastIndex) {
+              p.appendChild(document.createTextNode(lineText.slice(lastIndex, match.index)));
+            }
+            const tagSpan = document.createElement('span');
+            tagSpan.className = 'cue-tag';
+            tagSpan.textContent = match[1];
+            p.appendChild(tagSpan);
+
+            if (!firstCueInLine) firstCueInLine = match[1];
+            lastIndex = CUE_REGEX.lastIndex;
+          }
+
+          if (lastIndex < lineText.length) {
+            p.appendChild(document.createTextNode(lineText.slice(lastIndex)));
+          }
+
+          if (firstCueInLine) {
+            p.dataset.cueTc = firstCueInLine;
+          }
+
+          scriptTrack.appendChild(p);
+        });
+
+        applyTypography();
+        measureCuePositions();
+        if (state.syncMode === 'AUTO') {
+          targetScrollY = Math.max(0, Math.min(maxScrollY, targetScrollY));
+          currentScrollY = Math.max(0, Math.min(maxScrollY, currentScrollY));
+          scriptTrack.style.transform = `translate3d(0, ${-currentScrollY}px, 0)`;
+        } else {
+          updateTargetScroll(true);
+        }
+        syncSimSliderBounds();
+      }
+
+      function applyTypography() {
+        const align = (state.textAlign === 'center' || state.textAlign === 'justify') ? state.textAlign : 'left';
+        scriptTrack.style.fontSize = `${state.fontSize}px`;
+        scriptTrack.style.paddingLeft = `${state.sideMargin}%`;
+        scriptTrack.style.paddingRight = `${state.sideMargin}%`;
+        scriptTrack.style.lineHeight = String(state.lineHeight);
+        scriptTrack.style.textAlign = align;
+        stageMirrorWrap.classList.toggle('mirrored', Boolean(state.mirrored));
+      }
+
+      function measureCuePositions() {
+        const halfH = stageViewport.clientHeight / 2;
+        const firstLineHalf = (state.fontSize * state.lineHeight) * 0.45;
+        maxScrollY = Math.max(0, scriptTrack.scrollHeight - stageViewport.clientHeight);
+
+        const rawCues = [];
+        const nodes = scriptTrack.querySelectorAll('[data-cue-tc]');
+        const fpsMode = getEffectiveFpsMode();
+
+        nodes.forEach((el) => {
+          const tcStr = el.dataset.cueTc;
+          const sec = tcStrToSeconds(tcStr, fpsMode);
+          if (sec !== null) {
+            // Align the first line of this block directly on the red center guideline
+            const y = Math.max(0, Math.min(maxScrollY, el.offsetTop + firstLineHalf - halfH));
+            let labelText = '';
+            el.childNodes.forEach((child) => {
+              if (child.nodeType === Node.TEXT_NODE) {
+                labelText += child.textContent;
+              }
+            });
+            labelText = labelText.trim() || '(Cue senza testo)';
+            rawCues.push({ sec, y, rawTC: tcStr, label: labelText });
+          }
+        });
+
+        rawCues.sort((a, b) => a.sec - b.sec);
+        cuePoints = rawCues;
+        cueCountText.textContent = `${cuePoints.length} Cue Marker rilevati`;
+        btnCueSidebarLabel.textContent = `Cue (${cuePoints.length})`;
+        cueSidebarTitle.textContent = `Cue Marker (${cuePoints.length})`;
+        renderCueSidebar();
+      }
+
+      function renderCueSidebar() {
+        cueSidebarList.innerHTML = '';
+        if (cuePoints.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'cue-sidebar-empty';
+          empty.innerHTML = 'Nessun Cue Marker trovato.<br><br>Aggiungi tag nel formato <span class="help-code">[HH:MM:SS:FF]</span> nel copione per navigare rapidamente tra le battute.';
+          cueSidebarList.appendChild(empty);
+          return;
+        }
+
+        cuePoints.forEach((cue, idx) => {
+          const item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'cue-item';
+          item.dataset.cueIndex = String(idx);
+
+          const tcEl = document.createElement('span');
+          tcEl.className = 'cue-item-tc';
+          tcEl.textContent = cue.rawTC;
+
+          const labelEl = document.createElement('span');
+          labelEl.className = 'cue-item-label';
+          labelEl.textContent = cue.label;
+
+          item.appendChild(tcEl);
+          item.appendChild(labelEl);
+          item.addEventListener('click', () => jumpToCueMarker(cue));
+          cueSidebarList.appendChild(item);
+        });
+
+        updateActiveCueHighlight();
+      }
+
+      function updateActiveCueHighlight() {
+        if (cuePoints.length === 0) return;
+        let activeIdx = -1;
+        for (let i = 0; i < cuePoints.length; i++) {
+          if (currentTimeSec >= cuePoints[i].sec - 0.05) {
+            activeIdx = i;
+          } else {
+            break;
+          }
+        }
+        const items = cueSidebarList.querySelectorAll('.cue-item');
+        items.forEach((btn, idx) => {
+          btn.classList.toggle('is-active', idx === activeIdx);
+        });
+      }
+
+      function jumpToCueMarker(cue) {
+        simCurrentSec = cue.sec;
+        if (simPlaying) simLastFrameMs = performance.now();
+        setLiveTimecode(cue.sec, cue.rawTC, true);
+        // Ensure exact scroll alignment to this marker's line even when Sync Mode A is active
+        targetScrollY = cue.y;
+        currentScrollY = cue.y;
+        scriptTrack.style.transform = `translate3d(0, ${-currentScrollY}px, 0)`;
+        syncSimSliderBounds();
+        updateActiveCueHighlight();
+      }
+
+      function recalcCueTimes() {
+        measureCuePositions();
+        updateTargetScroll(true);
+        syncSimSliderBounds();
+      }
+
+      /* ---------------- Scroll Calculation (Mode A & Mode B) ---------------- */
+      function computeTargetScrollY(timeSec) {
+        if (maxScrollY <= 0) return 0;
+        const fpsMode = getEffectiveFpsMode();
+        const startSec = tcStrToSeconds(state.startTC, fpsMode) ?? 3600;
+        const endSec = tcStrToSeconds(state.endTC, fpsMode) ?? 3810;
+
+        if (state.syncMode === 'A' || cuePoints.length === 0) {
+          if (endSec <= startSec) return 0;
+          const progress = Math.max(0, Math.min(1, (timeSec - startSec) / (endSec - startSec)));
+          return progress * maxScrollY;
+        }
+
+        // Mode B: Cue Marker Interpolation
+        const first = cuePoints[0];
+        const last = cuePoints[cuePoints.length - 1];
+
+        if (timeSec <= first.sec) {
+          if (startSec < first.sec && first.y > 0) {
+            const p = Math.max(0, (timeSec - startSec) / (first.sec - startSec));
+            return p * first.y;
+          }
+          return first.y;
+        }
+
+        if (timeSec >= last.sec) {
+          if (endSec > last.sec && maxScrollY > last.y) {
+            const p = Math.min(1, (timeSec - last.sec) / (endSec - last.sec));
+            return last.y + p * (maxScrollY - last.y);
+          }
+          return last.y;
+        }
+
+        for (let i = 0; i < cuePoints.length - 1; i++) {
+          const a = cuePoints[i];
+          const b = cuePoints[i + 1];
+          if (timeSec >= a.sec && timeSec <= b.sec) {
+            const span = b.sec - a.sec;
+            if (span <= 0) return b.y;
+            const alpha = (timeSec - a.sec) / span;
+            return a.y + alpha * (b.y - a.y);
+          }
+        }
+
+        return last.y;
+      }
+
+      function updateTargetScroll(immediateSnap) {
+        if (state.syncMode === 'AUTO') return;
+        targetScrollY = computeTargetScrollY(currentTimeSec);
+        if (immediateSnap) {
+          currentScrollY = targetScrollY;
+          scriptTrack.style.transform = `translate3d(0, ${-currentScrollY}px, 0)`;
+        }
+      }
+
+      /* ---------------- Auto-Scroll Smooth Controls ---------------- */
+      function updateAutoPlayButtonUI() {
+        btnAutoPlay.textContent = autoScrollPlaying ? '⏸ Pausa' : '▶ Avvia';
+        btnAutoPlay.classList.toggle('btn-success', !autoScrollPlaying);
+        btnAutoPlay.classList.toggle('is-active', autoScrollPlaying);
+      }
+
+      function startAutoScroll() {
+        if (state.syncMode !== 'AUTO') return;
+        if (maxScrollY > 0 && currentScrollY >= maxScrollY - 0.5) {
+          targetScrollY = 0;
+          currentScrollY = 0;
+          scriptTrack.style.transform = 'translate3d(0, 0px, 0)';
+        }
+        autoScrollPlaying = true;
+        autoScrollLastFrameMs = performance.now();
+        updateAutoPlayButtonUI();
+      }
+
+      function stopAutoScroll() {
+        autoScrollPlaying = false;
+        autoScrollLastFrameMs = 0;
+        updateAutoPlayButtonUI();
+      }
+
+      function toggleAutoScroll() {
+        if (autoScrollPlaying) stopAutoScroll();
+        else startAutoScroll();
+      }
+
+      function resetAutoScroll() {
+        stopAutoScroll();
+        targetScrollY = 0;
+        currentScrollY = 0;
+        scriptTrack.style.transform = 'translate3d(0, 0px, 0)';
+      }
+
+      function setAutoScrollSpeedPx(rawVal, persist) {
+        const parsed = Number(rawVal);
+        const clamped = Number.isFinite(parsed) ? Math.max(1, Math.min(600, Math.round(parsed))) : 45;
+        state.autoScrollSpeedPx = clamped;
+        autoSpeedSlider.value = String(Math.max(5, Math.min(300, clamped)));
+        autoSpeedInput.value = String(clamped);
+        if (pedalScrollSpeedSlider) pedalScrollSpeedSlider.value = String(Math.max(5, Math.min(300, clamped)));
+        if (pedalScrollSpeedInput) pedalScrollSpeedInput.value = String(clamped);
+        if (persist) saveState();
+      }
+
+      /* ---------------- Main 60/120fps Animation Loop ---------------- */
+      function tick(now) {
+        // 1. Simulator Advance
+        if (simPlaying) {
+          if (simLastFrameMs === 0) simLastFrameMs = now;
+          const dtSec = Math.min(0.1, (now - simLastFrameMs) / 1000);
+          simLastFrameMs = now;
+          simCurrentSec += dtSec;
+
+          const bounds = getSimBounds();
+          if (simCurrentSec > bounds.maxSec) {
+            simCurrentSec = bounds.maxSec;
+            stopSimulator();
+          }
+
+          const fpsMode = getEffectiveFpsMode();
+          const tcStr = secondsToTCString(simCurrentSec, fpsMode);
+          mtcPulseToggle = Math.floor(simCurrentSec * 4) % 2 === 0;
+          setLiveTimecode(simCurrentSec, tcStr, false);
+
+          if (!simDragging) {
+            const ratio = bounds.maxSec > bounds.minSec
+              ? Math.max(0, Math.min(1, (simCurrentSec - bounds.minSec) / (bounds.maxSec - bounds.minSec)))
+              : 0;
+            simSlider.value = String(Math.round(ratio * 1000));
+            simRangeLabel.textContent = tcStr;
+            if (document.activeElement !== simJumpInput) {
+              simJumpInput.value = tcStr;
+            }
+          }
+        }
+
+        // 2. Smooth Scroll Tracking (Fast Hold OR Auto-Scroll Smooth px/s OR MTC Sync)
+        if (pedalHoldDir !== 0 && !isPedalExecutionBlocked()) {
+          if (pedalHoldLastMs === 0) pedalHoldLastMs = now;
+          const dtHoldSec = Math.min(0.1, Math.max(0, (now - pedalHoldLastMs) / 1000));
+          pedalHoldLastMs = now;
+          const fastSpeed = Math.max(20, Math.min(1500, Number(pedalConfig.fastScrollSpeedPx) || 340));
+          targetScrollY = Math.max(0, Math.min(maxScrollY, targetScrollY + pedalHoldDir * fastSpeed * dtHoldSec));
+          currentScrollY = targetScrollY;
+          scriptTrack.style.transform = `translate3d(0, ${-currentScrollY}px, 0)`;
+        } else if (state.syncMode === 'AUTO' && autoScrollPlaying) {
+          if (autoScrollLastFrameMs === 0) autoScrollLastFrameMs = now;
+          const dtSec = Math.min(0.1, Math.max(0, (now - autoScrollLastFrameMs) / 1000));
+          autoScrollLastFrameMs = now;
+          const speedPx = Math.max(1, Math.min(600, Number(state.autoScrollSpeedPx) || 45));
+          targetScrollY = Math.min(maxScrollY, targetScrollY + speedPx * dtSec);
+          currentScrollY = targetScrollY;
+          scriptTrack.style.transform = `translate3d(0, ${-currentScrollY}px, 0)`;
+          if (maxScrollY > 0 && currentScrollY >= maxScrollY) {
+            stopAutoScroll();
+          }
+        } else {
+          const diff = targetScrollY - currentScrollY;
+          if (Math.abs(diff) > 0.15) {
+            currentScrollY += diff * 0.28;
+            scriptTrack.style.transform = `translate3d(0, ${-currentScrollY}px, 0)`;
+          } else if (diff !== 0) {
+            currentScrollY = targetScrollY;
+            scriptTrack.style.transform = `translate3d(0, ${-currentScrollY}px, 0)`;
+          }
+        }
+
+        // 3. Green MTC Activity LED (blinks strictly when MTC signal is moving)
+        const isMoving = (now - lastMtcActivityMs) < 260;
+        const ledShouldLight = isMoving && (simPlaying ? mtcPulseToggle : ((Math.floor(now / 125) % 2 === 0) || mtcPulseToggle));
+        mtcLed.classList.toggle('is-lit', ledShouldLight);
+
+        // 4. Header BPM Indicator (MTC Flow Rate + MIDI Clock 0xF8 fallback + Tap Tempo Ref)
+        updateBpmIndicator(now);
+
+        requestAnimationFrame(tick);
+      }
+
+      function updateBpmIndicator(now) {
+        const refBpm = Math.max(30, Math.min(300, Number(state.referenceBpm) || 120));
+        const hasClock = (now - lastMidiClockMs) < 500 && measuredClockBpm > 0;
+        const hasMtcFlow = (now - lastMtcActivityMs) < 420;
+        const showTapFeedback = now < tapTempoFeedbackUntilMs;
+
+        let valText = '--- BPM';
+        let subText = `MTC · ${Math.round(refBpm)} ref`;
+        let modeClass = '';
+
+        if (showTapFeedback) {
+          valText = `${Math.round(refBpm)} BPM`;
+          subText = 'TAP REF';
+          modeClass = 'is-active';
+        } else if (hasClock) {
+          valText = `${measuredClockBpm.toFixed(1)} BPM`;
+          subText = 'CLK 0xF8';
+          modeClass = 'is-clock';
+        } else if (hasMtcFlow) {
+          const ratio = Math.abs(smoothedSpeedRatio - 1) < 0.012 ? 1 : smoothedSpeedRatio;
+          const liveBpm = refBpm * ratio;
+          const isVarispeed = Math.abs(ratio - 1) >= 0.015;
+          valText = `${liveBpm.toFixed(1)} BPM`;
+          subText = `${simPlaying ? 'SIM' : 'MTC'} ${ratio.toFixed(2)}x`;
+          modeClass = isVarispeed ? 'is-varispeed' : 'is-active';
+        } else {
+          smoothedSpeedRatio = 1;
+        }
+
+        const key = `${valText}|${subText}|${modeClass}`;
+        if (key === lastBpmDisplayKey) return;
+        lastBpmDisplayKey = key;
+
+        mtcBpmValue.textContent = valText;
+        mtcBpmSub.textContent = subText;
+        mtcBpmIndicator.classList.toggle('is-active', modeClass === 'is-active');
+        mtcBpmIndicator.classList.toggle('is-varispeed', modeClass === 'is-varispeed');
+        mtcBpmIndicator.classList.toggle('is-clock', modeClass === 'is-clock');
+      }
+
+      /* ---------------- Simulator Controls ---------------- */
+      function getSimBounds() {
+        const fpsMode = getEffectiveFpsMode();
+        const startSec = tcStrToSeconds(state.startTC, fpsMode) ?? 3600;
+        const endSec = tcStrToSeconds(state.endTC, fpsMode) ?? 3810;
+
+        if (state.syncMode === 'B' && cuePoints.length > 0) {
+          const minSec = Math.min(startSec, cuePoints[0].sec);
+          const maxSec = Math.max(endSec, cuePoints[cuePoints.length - 1].sec + 8);
+          return { minSec, maxSec: Math.max(minSec + 10, maxSec) };
+        }
+        return { minSec: startSec, maxSec: Math.max(startSec + 10, endSec) };
+      }
+
+      function syncSimSliderBounds() {
+        const bounds = getSimBounds();
+        const ratio = bounds.maxSec > bounds.minSec
+          ? Math.max(0, Math.min(1, (simCurrentSec - bounds.minSec) / (bounds.maxSec - bounds.minSec)))
+          : 0;
+        simSlider.value = String(Math.round(ratio * 1000));
+        const tcStr = secondsToTCString(simCurrentSec, getEffectiveFpsMode());
+        simRangeLabel.textContent = tcStr;
+        if (document.activeElement !== simJumpInput) {
+          simJumpInput.value = tcStr;
+        }
+      }
+
+      function startSimulator() {
+        const bounds = getSimBounds();
+        if (simCurrentSec >= bounds.maxSec) {
+          simCurrentSec = bounds.minSec;
+        }
+        simPlaying = true;
+        simLastFrameMs = performance.now();
+        btnSimPlay.textContent = 'Pausa Sim.';
+      }
+
+      function stopSimulator() {
+        simPlaying = false;
+        simLastFrameMs = 0;
+        btnSimPlay.textContent = 'Simula Play MTC';
+      }
+
+      /* ---------------- HUD Auto-Hide & Tap Toggle ---------------- */
+      function isAnyOverlayOpen() {
+        return (
+          editorModal.classList.contains('is-open') ||
+          helpModal.classList.contains('is-open') ||
+          pedalModal.classList.contains('is-open') ||
+          simPanel.classList.contains('is-open') ||
+          cueSidebar.classList.contains('is-open') ||
+          setlistDrawer.classList.contains('is-open')
+        );
+      }
+
+      function showHud() {
+        hudVisible = true;
+        topBar.classList.remove('is-hidden');
+        bottomBar.classList.remove('is-hidden');
+        hudRevealHint.classList.remove('is-visible');
+        if (pedalToast) pedalToast.classList.add('is-hud-visible');
+        scheduleAutoHide();
+      }
+
+      function hideHud() {
+        if (isAnyOverlayOpen()) return;
+        hudVisible = false;
+        topBar.classList.add('is-hidden');
+        bottomBar.classList.add('is-hidden');
+        hudRevealHint.classList.add('is-visible');
+        if (pedalToast) pedalToast.classList.remove('is-hud-visible');
+        clearTimeout(hudHideTimer);
+      }
+
+      function scheduleAutoHide() {
+        clearTimeout(hudHideTimer);
+        if (!state.autoHide || isAnyOverlayOpen()) return;
+        hudHideTimer = setTimeout(() => {
+          hideHud();
+        }, 4200);
+      }
+
+      let stageTouchStartY = 0;
+      let stageTouchStartScrollY = 0;
+      let stageTouchDidDrag = false;
+
+      stageViewport.addEventListener('touchstart', (e) => {
+        if (state.syncMode !== 'AUTO' || e.touches.length !== 1) return;
+        stageTouchStartY = e.touches[0].clientY;
+        stageTouchStartScrollY = targetScrollY;
+        stageTouchDidDrag = false;
+      }, { passive: true });
+
+      stageViewport.addEventListener('touchmove', (e) => {
+        if (state.syncMode !== 'AUTO' || e.touches.length !== 1) return;
+        const deltaY = stageTouchStartY - e.touches[0].clientY;
+        if (Math.abs(deltaY) > 8) {
+          stageTouchDidDrag = true;
+        }
+        if (stageTouchDidDrag) {
+          targetScrollY = Math.max(0, Math.min(maxScrollY, stageTouchStartScrollY + deltaY));
+          currentScrollY = targetScrollY;
+          scriptTrack.style.transform = `translate3d(0, ${-currentScrollY}px, 0)`;
+        }
+      }, { passive: true });
+
+      stageViewport.addEventListener('click', () => {
+        if (stageTouchDidDrag) {
+          stageTouchDidDrag = false;
+          return;
+        }
+        if (hudVisible) hideHud();
+        else showHud();
+      });
+
+      [topBar, bottomBar].forEach((bar) => {
+        bar.addEventListener('pointerdown', () => scheduleAutoHide());
+        bar.addEventListener('input', () => scheduleAutoHide());
+      });
+
+      /* ---------------- Wake Lock API ---------------- */
+      async function requestWakeLock() {
+        if (!('wakeLock' in navigator)) {
+          wakeLockStatus.textContent = 'Wake Lock non supportato';
+          return;
+        }
+        try {
+          if (wakeLockSentinel) return;
+          wakeLockSentinel = await navigator.wakeLock.request('screen');
+          wakeLockStatus.textContent = 'Schermo attivo: ON';
+          wakeLockSentinel.addEventListener('release', () => {
+            wakeLockSentinel = null;
+            wakeLockStatus.textContent = 'Schermo attivo: in attesa';
+          });
+        } catch (err) {
+          wakeLockStatus.textContent = 'Schermo attivo: tocca per attivare';
+        }
+      }
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          requestWakeLock();
+        }
+      });
+
+      document.addEventListener('pointerdown', () => {
+        if (!wakeLockSentinel) requestWakeLock();
+      }, { once: true });
+
+      /* ---------------- Fullscreen API ---------------- */
+      function updateFullscreenButton() {
+        const isFs = Boolean(document.fullscreenElement);
+        btnFullscreen.classList.toggle('is-active', isFs);
+      }
+
+      btnFullscreen.addEventListener('click', async () => {
+        try {
+          if (!document.fullscreenElement) {
+            await document.documentElement.requestFullscreen();
+          } else {
+            await document.exitFullscreen();
+          }
+        } catch (err) {
+          // Ignore if blocked by browser policy
+        }
+      });
+
+      document.addEventListener('fullscreenchange', () => {
+        updateFullscreenButton();
+        setTimeout(() => {
+          renderScript();
+        }, 120);
+      });
+
+      /* ---------------- UI Event Wiring ---------------- */
+      function updateFpsReadout() {
+        const eff = getEffectiveFpsMode();
+        const label = eff === 29.97 ? '29.97 DF' : `${eff} fps`;
+        fpsReadout.textContent = state.fpsSetting === 'auto' ? `Auto (${label})` : label;
+      }
+
+      function applySyncModeUI() {
+        const isA = state.syncMode === 'A';
+        const isB = state.syncMode === 'B';
+        const isAuto = state.syncMode === 'AUTO';
+        modeBtnA.classList.toggle('is-selected', isA);
+        modeBtnB.classList.toggle('is-selected', isB);
+        modeBtnAuto.classList.toggle('is-selected', isAuto);
+        modeBtnA.setAttribute('aria-selected', String(isA));
+        modeBtnB.setAttribute('aria-selected', String(isB));
+        modeBtnAuto.setAttribute('aria-selected', String(isAuto));
+        modeAInputs.classList.toggle('hidden', !isA);
+        modeBInfo.classList.toggle('hidden', !isB);
+        modeAutoControls.classList.toggle('hidden', !isAuto);
+      }
+
+      modeBtnA.addEventListener('click', () => {
+        stopAutoScroll();
+        state.syncMode = 'A';
+        saveState();
+        syncCurrentSongFromState();
+        applySyncModeUI();
+        updateTargetScroll(true);
+        syncSimSliderBounds();
+      });
+
+      modeBtnB.addEventListener('click', () => {
+        stopAutoScroll();
+        state.syncMode = 'B';
+        saveState();
+        syncCurrentSongFromState();
+        applySyncModeUI();
+        measureCuePositions();
+        updateTargetScroll(true);
+        syncSimSliderBounds();
+      });
+
+      modeBtnAuto.addEventListener('click', () => {
+        state.syncMode = 'AUTO';
+        saveState();
+        syncCurrentSongFromState();
+        applySyncModeUI();
+      });
+
+      btnAutoPlay.addEventListener('click', toggleAutoScroll);
+      btnAutoReset.addEventListener('click', resetAutoScroll);
+
+      autoSpeedSlider.addEventListener('input', () => {
+        setAutoScrollSpeedPx(autoSpeedSlider.value, true);
+      });
+
+      autoSpeedInput.addEventListener('input', () => {
+        if (autoSpeedInput.value === '') return;
+        setAutoScrollSpeedPx(autoSpeedInput.value, true);
+      });
+
+      autoSpeedInput.addEventListener('change', () => {
+        setAutoScrollSpeedPx(autoSpeedInput.value, true);
+      });
+
+      stageViewport.addEventListener('wheel', (e) => {
+        if (state.syncMode !== 'AUTO') return;
+        e.preventDefault();
+        targetScrollY = Math.max(0, Math.min(maxScrollY, targetScrollY + e.deltaY));
+        currentScrollY = targetScrollY;
+        scriptTrack.style.transform = `translate3d(0, ${-currentScrollY}px, 0)`;
+      }, { passive: false });
+
+      /* ---------------- 2-Switch Pedal Engine (LEKATO HID + MIDI) ---------------- */
+      function showPedalToast(message, sticky) {
+        if (!pedalToast) return;
+        clearTimeout(pedalToastTimer);
+        pedalToast.textContent = message;
+        pedalToast.classList.toggle('is-hud-visible', hudVisible);
+        pedalToast.classList.add('is-visible');
+        if (!sticky) {
+          pedalToastTimer = setTimeout(() => {
+            pedalToast.classList.remove('is-visible');
+          }, 1000);
+        }
+      }
+
+      function schedulePedalToastHide(delayMs) {
+        if (!pedalToast) return;
+        clearTimeout(pedalToastTimer);
+        pedalToastTimer = setTimeout(() => {
+          pedalToast.classList.remove('is-visible');
+        }, delayMs);
+      }
+
+      function isTextEditingActive() {
+        const el = document.activeElement;
+        if (!el) return false;
+        const tag = el.tagName;
+        if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+        if (tag === 'INPUT') {
+          const t = (el.type || 'text').toLowerCase();
+          return t !== 'range' && t !== 'button' && t !== 'checkbox' && t !== 'radio';
+        }
+        return Boolean(el.isContentEditable);
+      }
+
+      function isPedalExecutionBlocked() {
+        return (
+          learningSwitchId !== null ||
+          isTextEditingActive() ||
+          editorModal.classList.contains('is-open') ||
+          helpModal.classList.contains('is-open') ||
+          pedalModal.classList.contains('is-open')
+        );
+      }
+
+      function isLiveNuendoMtcRunning() {
+        return !simPlaying && (performance.now() - lastMtcActivityMs) < 550;
+      }
+
+      function resetAllSwitchStates() {
+        pedalHoldDir = 0;
+        pedalHoldLastMs = 0;
+        ['left', 'right'].forEach((side) => {
+          const sw = switchRuntime[side];
+          sw.isDown = false;
+          sw.didHold = false;
+          sw.consumedDoubleTap = false;
+          if (sw.holdTimer) {
+            clearTimeout(sw.holdTimer);
+            sw.holdTimer = null;
+          }
+          if (sw.tapTimer) {
+            clearTimeout(sw.tapTimer);
+            sw.tapTimer = null;
+          }
+        });
+      }
+
+      function goToPrevSong() {
+        const sl = getActiveSetlist();
+        const idx = getActiveSongIndex();
+        if (sl && idx > 0) {
+          loadSong(sl.songs[idx - 1], { preserveCurrentTime: false });
+          return true;
+        }
+        return false;
+      }
+
+      function goToNextSong() {
+        const sl = getActiveSetlist();
+        const idx = getActiveSongIndex();
+        if (sl && idx >= 0 && idx < sl.songs.length - 1) {
+          loadSong(sl.songs[idx + 1], { preserveCurrentTime: false });
+          return true;
+        }
+        return false;
+      }
+
+      function executePedalPlayPause() {
+        if (isLiveNuendoMtcRunning() && state.syncMode !== 'AUTO') {
+          showPedalToast('MTC Live attivo', false);
+          return;
+        }
+        if (state.syncMode !== 'AUTO') {
+          state.syncMode = 'AUTO';
+          saveState();
+          syncCurrentSongFromState();
+          applySyncModeUI();
+          startAutoScroll();
+          showPedalToast('Play Scorrimento', false);
+        } else {
+          toggleAutoScroll();
+          showPedalToast(autoScrollPlaying ? 'Play Scorrimento' : 'Pausa Scorrimento', false);
+        }
+      }
+
+      function resetCurrentSongScroll() {
+        if (isLiveNuendoMtcRunning() && state.syncMode !== 'AUTO') {
+          showPedalToast('MTC Live attivo', false);
+          return;
+        }
+        if (state.syncMode === 'AUTO') {
+          resetAutoScroll();
+        } else {
+          targetScrollY = 0;
+          currentScrollY = 0;
+          scriptTrack.style.transform = 'translate3d(0, 0px, 0)';
+        }
+        showPedalToast('Inizio Brano', false);
+      }
+
+      function executeSingleTap(side) {
+        if (isPedalExecutionBlocked()) return;
+        if (side === 'right') {
+          executePedalPlayPause();
+        } else {
+          resetCurrentSongScroll();
+        }
+      }
+
+      function executeDoubleTap(side) {
+        if (isPedalExecutionBlocked()) return;
+        if (side === 'right') {
+          const moved = goToNextSong();
+          showPedalToast(moved ? 'Brano Successivo' : 'Ultimo Brano della Setlist', false);
+        } else {
+          const moved = goToPrevSong();
+          showPedalToast(moved ? 'Brano Precedente' : 'Primo Brano della Setlist', false);
+        }
+      }
+
+      function onSwitchDown(side, allowHold) {
+        const sw = switchRuntime[side];
+        if (!sw || sw.isDown) return;
+        sw.isDown = true;
+        sw.didHold = false;
+        sw.consumedDoubleTap = false;
+
+        // If a single-tap window is still open (<= 350ms), treat as Double Tap immediately
+        if (sw.tapTimer) {
+          clearTimeout(sw.tapTimer);
+          sw.tapTimer = null;
+          sw.consumedDoubleTap = true;
+          executeDoubleTap(side);
+          return;
+        }
+
+        // Start Hold detection timer (> 400ms)
+        if (allowHold) {
+          sw.holdTimer = setTimeout(() => {
+            sw.holdTimer = null;
+            if (!sw.isDown || isPedalExecutionBlocked()) return;
+            sw.didHold = true;
+            if (isLiveNuendoMtcRunning() && state.syncMode !== 'AUTO') {
+              showPedalToast('MTC Live attivo', false);
+              return;
+            }
+            pedalHoldDir = (side === 'right') ? 1 : -1;
+            pedalHoldLastMs = performance.now();
+            showPedalToast(side === 'right' ? 'Avanti Veloce' : 'Indietro Veloce', true);
+          }, HOLD_THRESHOLD_MS);
+        }
+      }
+
+      function onSwitchUp(side) {
+        const sw = switchRuntime[side];
+        if (!sw || !sw.isDown) return;
+        sw.isDown = false;
+
+        if (sw.holdTimer) {
+          clearTimeout(sw.holdTimer);
+          sw.holdTimer = null;
+        }
+
+        if (sw.didHold) {
+          sw.didHold = false;
+          const expectedDir = (side === 'right') ? 1 : -1;
+          if (pedalHoldDir === expectedDir) {
+            pedalHoldDir = 0;
+            pedalHoldLastMs = 0;
+          }
+          schedulePedalToastHide(1000);
+          return;
+        }
+
+        if (sw.consumedDoubleTap) {
+          sw.consumedDoubleTap = false;
+          return;
+        }
+
+        // Released before 400ms on first tap -> wait 350ms for potential Double Tap
+        sw.tapTimer = setTimeout(() => {
+          sw.tapTimer = null;
+          executeSingleTap(side);
+        }, DOUBLE_TAP_WINDOW_MS);
+      }
+
+      function formatKeyboardBinding(e) {
+        let name = e.code || e.key || 'Tasto';
+        if (name === ' ' || name === 'Spacebar') name = 'Space';
+        return {
+          kind: 'key',
+          code: e.code || '',
+          key: e.key || '',
+          altCodes: [],
+          altKeys: [],
+          label: `Tasto: ${name}`
+        };
+      }
+
+      function doesKeyMatchBinding(e, binding) {
+        if (!binding || binding.kind !== 'key') return false;
+        const code = e.code && e.code !== 'Unidentified' ? e.code : '';
+        const keyLower = e.key ? e.key.toLowerCase() : '';
+
+        if (code) {
+          if (binding.code && code === binding.code) return true;
+          if (Array.isArray(binding.altCodes) && binding.altCodes.includes(code)) return true;
+        }
+        if (keyLower) {
+          if (binding.key && keyLower === binding.key.toLowerCase()) return true;
+          if (Array.isArray(binding.altKeys) && binding.altKeys.some((k) => k.toLowerCase() === keyLower)) return true;
+        }
+        return false;
+      }
+
+      function setPedalSignalDebug(label) {
+        if (pedalLastSignal) {
+          pedalLastSignal.textContent = `Ultimo segnale: ${label}`;
+        }
+      }
+
+      function renderPedalMappingList() {
+        if (!pedalMappingList) return;
+        pedalMappingList.innerHTML = '';
+
+        PEDAL_SWITCHES.forEach((sw) => {
+          const row = document.createElement('div');
+          const isListening = learningSwitchId === sw.id;
+          row.className = 'pedal-row' + (isListening ? ' is-listening' : '');
+
+          const info = document.createElement('div');
+          info.className = 'pedal-row-info';
+
+          const title = document.createElement('div');
+          title.className = 'pedal-row-title';
+          title.textContent = sw.title;
+
+          const ul = document.createElement('ul');
+          ul.className = 'pedal-gesture-list';
+          sw.gestures.forEach((g) => {
+            const li = document.createElement('li');
+            const tag = document.createElement('span');
+            tag.className = 'pedal-gesture-tag';
+            tag.textContent = g.tag;
+            li.appendChild(tag);
+            li.appendChild(document.createTextNode(g.text));
+            ul.appendChild(li);
+          });
+
+          info.appendChild(title);
+          info.appendChild(ul);
+
+          const controls = document.createElement('div');
+          controls.className = 'pedal-row-controls';
+
+          const binding = pedalConfig.bindings[sw.id];
+          const badge = document.createElement('span');
+          badge.className = 'pedal-binding-badge';
+          if (isListening) {
+            badge.classList.add('is-listening');
+            badge.textContent = 'Premi interruttore (HID/MIDI)...';
+          } else if (binding) {
+            if (binding.kind === 'midi') badge.classList.add('is-midi');
+            badge.textContent = binding.label;
+          } else {
+            badge.classList.add('is-empty');
+            badge.textContent = 'Non assegnato';
+          }
+
+          const btnLearn = document.createElement('button');
+          btnLearn.type = 'button';
+          btnLearn.className = 'btn btn-mini' + (isListening ? ' is-listening' : ' is-active');
+          btnLearn.textContent = isListening ? 'Annulla' : 'Assegna';
+          btnLearn.addEventListener('click', () => {
+            btnLearn.blur();
+            learningSwitchId = (learningSwitchId === sw.id) ? null : sw.id;
+            renderPedalMappingList();
+          });
+
+          const btnClear = document.createElement('button');
+          btnClear.type = 'button';
+          btnClear.className = 'btn btn-mini';
+          btnClear.title = 'Rimuovi associazione';
+          btnClear.textContent = '✕';
+          btnClear.disabled = !binding && !isListening;
+          btnClear.addEventListener('click', () => {
+            if (learningSwitchId === sw.id) learningSwitchId = null;
+            pedalConfig.bindings[sw.id] = null;
+            savePedalConfig();
+            renderPedalMappingList();
+          });
+
+          controls.appendChild(badge);
+          controls.appendChild(btnLearn);
+          controls.appendChild(btnClear);
+
+          row.appendChild(info);
+          row.appendChild(controls);
+          pedalMappingList.appendChild(row);
+        });
+      }
+
+      function syncPedalSpeedControls() {
+        const scrollPx = Math.max(1, Math.min(600, Number(state.autoScrollSpeedPx) || 45));
+        const fastPx = Math.max(20, Math.min(1500, Number(pedalConfig.fastScrollSpeedPx) || 340));
+
+        pedalScrollSpeedSlider.value = String(Math.max(5, Math.min(300, scrollPx)));
+        pedalScrollSpeedInput.value = String(scrollPx);
+        pedalFastSpeedSlider.value = String(Math.max(60, Math.min(1200, fastPx)));
+        pedalFastSpeedInput.value = String(fastPx);
+      }
+
+      function openPedalModal() {
+        resetAllSwitchStates();
+        learningSwitchId = null;
+        updatePedalMidiBanner();
+        syncPedalSpeedControls();
+        renderPedalMappingList();
+        pedalModal.classList.add('is-open');
+        clearTimeout(hudHideTimer);
+      }
+
+      function closePedalModal() {
+        learningSwitchId = null;
+        pedalModal.classList.remove('is-open');
+        scheduleAutoHide();
+      }
+
+      btnPedalModal.addEventListener('click', openPedalModal);
+      btnClosePedal.addEventListener('click', closePedalModal);
+      btnClosePedalFooter.addEventListener('click', closePedalModal);
+      pedalModal.addEventListener('click', (e) => {
+        if (e.target === pedalModal) closePedalModal();
+      });
+
+      btnPedalResetDefaults.addEventListener('click', () => {
+        learningSwitchId = null;
+        pedalConfig = createDefaultPedalConfig();
+        savePedalConfig();
+        syncPedalSpeedControls();
+        renderPedalMappingList();
+        setPedalSignalDebug('Ripristinati predefiniti LEKATO');
+      });
+
+      pedalScrollSpeedSlider.addEventListener('input', () => {
+        setAutoScrollSpeedPx(pedalScrollSpeedSlider.value, true);
+      });
+      pedalScrollSpeedInput.addEventListener('input', () => {
+        if (pedalScrollSpeedInput.value === '') return;
+        setAutoScrollSpeedPx(pedalScrollSpeedInput.value, true);
+      });
+      pedalScrollSpeedInput.addEventListener('change', () => {
+        setAutoScrollSpeedPx(pedalScrollSpeedInput.value, true);
+      });
+
+      function setPedalFastSpeedPx(rawVal) {
+        const parsed = Number(rawVal);
+        const clamped = Number.isFinite(parsed) ? Math.max(20, Math.min(1500, Math.round(parsed))) : 340;
+        pedalConfig.fastScrollSpeedPx = clamped;
+        pedalFastSpeedSlider.value = String(Math.max(60, Math.min(1200, clamped)));
+        pedalFastSpeedInput.value = String(clamped);
+        savePedalConfig();
+      }
+
+      pedalFastSpeedSlider.addEventListener('input', () => setPedalFastSpeedPx(pedalFastSpeedSlider.value));
+      pedalFastSpeedInput.addEventListener('input', () => {
+        if (pedalFastSpeedInput.value !== '') setPedalFastSpeedPx(pedalFastSpeedInput.value);
+      });
+      pedalFastSpeedInput.addEventListener('change', () => setPedalFastSpeedPx(pedalFastSpeedInput.value));
+
+      // HID Keyboard Capture & 2-Switch Gesture Execution
+      const MODIFIER_ONLY_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'NumLock', 'ScrollLock']);
+
+      window.addEventListener('keydown', (e) => {
+        // 1. Learn Mode ("Assegna")
+        if (learningSwitchId !== null) {
+          if (MODIFIER_ONLY_KEYS.has(e.key)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.key === 'Escape') {
+            learningSwitchId = null;
+            renderPedalMappingList();
+            return;
+          }
+          const binding = formatKeyboardBinding(e);
+          pedalConfig.bindings[learningSwitchId] = binding;
+          savePedalConfig();
+          setPedalSignalDebug(binding.label);
+          learningSwitchId = null;
+          renderPedalMappingList();
+          return;
+        }
+
+        // 2. Safety Guard: disable pedal HID commands while typing/editing text or modals are open
+        if (isPedalExecutionBlocked()) return;
+
+        // 3. Match Left or Right Switch
+        for (let i = 0; i < PEDAL_SWITCHES.length; i++) {
+          const sw = PEDAL_SWITCHES[i];
+          const binding = pedalConfig.bindings[sw.id];
+          if (doesKeyMatchBinding(e, binding)) {
+            e.preventDefault();
+            if (!e.repeat) {
+              setPedalSignalDebug(binding.label);
+              onSwitchDown(sw.id, true);
+            }
+            break;
+          }
+        }
+      }, true);
+
+      window.addEventListener('keyup', (e) => {
+        if (learningSwitchId !== null) {
+          if (!MODIFIER_ONLY_KEYS.has(e.key)) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          return;
+        }
+        if (isPedalExecutionBlocked()) return;
+
+        for (let i = 0; i < PEDAL_SWITCHES.length; i++) {
+          const sw = PEDAL_SWITCHES[i];
+          const binding = pedalConfig.bindings[sw.id];
+          if (doesKeyMatchBinding(e, binding)) {
+            e.preventDefault();
+            onSwitchUp(sw.id);
+          }
+        }
+      }, true);
+
+      document.addEventListener('focusin', () => {
+        if (isTextEditingActive()) {
+          resetAllSwitchStates();
+        }
+      });
+
+      window.addEventListener('blur', resetAllSwitchStates);
+
+      // MIDI Pedal Capture & 2-Switch Gesture Execution (across all connected MIDI inputs)
+      function parsePedalMidiEvent(data) {
+        if (!data || data.length === 0) return null;
+        const rawStatus = data[0];
+        if (rawStatus >= 0xF0) return null; // Ignore MTC (0xF1), SysEx (0xF0), Clock (0xF8), Sensing (0xFE)
+        const type = rawStatus & 0xF0;
+        const channel = (rawStatus & 0x0F) + 1;
+
+        if (type === 0x90 && data.length >= 3) {
+          const note = data[1] & 0x7F;
+          const vel = data[2] & 0x7F;
+          return {
+            msgType: 'note',
+            channel,
+            number: note,
+            isPress: vel > 0,
+            isRelease: vel === 0,
+            allowHold: true,
+            value: vel,
+            label: `MIDI Note ${note} (Ch ${channel})`
+          };
+        }
+        if (type === 0x80 && data.length >= 3) {
+          const note = data[1] & 0x7F;
+          return {
+            msgType: 'note',
+            channel,
+            number: note,
+            isPress: false,
+            isRelease: true,
+            allowHold: true,
+            value: 0,
+            label: `MIDI Note ${note} (Ch ${channel})`
+          };
+        }
+        if (type === 0xB0 && data.length >= 3) {
+          const cc = data[1] & 0x7F;
+          const val = data[2] & 0x7F;
+          return {
+            msgType: 'cc',
+            channel,
+            number: cc,
+            isPress: null,
+            isRelease: null,
+            allowHold: true,
+            value: val,
+            label: `MIDI CC ${cc} (Ch ${channel})`
+          };
+        }
+        if (type === 0xC0 && data.length >= 2) {
+          const pg = data[1] & 0x7F;
+          return {
+            msgType: 'pc',
+            channel,
+            number: pg,
+            isPress: true,
+            isRelease: false,
+            allowHold: false,
+            value: pg,
+            label: `MIDI PC ${pg} (Ch ${channel})`
+          };
+        }
+        return null;
+      }
+
+      function handlePedalMidiMessage(event) {
+        const parsed = parsePedalMidiEvent(event.data);
+        if (!parsed) return;
+
+        setPedalSignalDebug(
+          parsed.msgType === 'cc' ? `${parsed.label} = ${parsed.value}` : parsed.label
+        );
+
+        // 1. Learn Mode ("Assegna")
+        if (learningSwitchId !== null) {
+          if (parsed.msgType === 'note' && !parsed.isPress) return;
+          const binding = {
+            kind: 'midi',
+            msgType: parsed.msgType,
+            channel: parsed.channel,
+            number: parsed.number,
+            pressHigh: parsed.msgType === 'cc' ? parsed.value >= 64 : true,
+            label: parsed.label
+          };
+          pedalConfig.bindings[learningSwitchId] = binding;
+          savePedalConfig();
+          learningSwitchId = null;
+          renderPedalMappingList();
+          return;
+        }
+
+        // 2. Safety Guard: disable pedal commands while editing text or modal is open
+        if (isPedalExecutionBlocked()) return;
+
+        // 3. Match Left or Right Switch
+        for (let i = 0; i < PEDAL_SWITCHES.length; i++) {
+          const sw = PEDAL_SWITCHES[i];
+          const b = pedalConfig.bindings[sw.id];
+          if (!b || b.kind !== 'midi') continue;
+          if (b.msgType !== parsed.msgType || b.channel !== parsed.channel || b.number !== parsed.number) {
+            continue;
+          }
+
+          if (parsed.msgType === 'cc') {
+            const pressed = b.pressHigh ? (parsed.value >= 64) : (parsed.value < 64);
+            if (pressed) onSwitchDown(sw.id, true);
+            else onSwitchUp(sw.id);
+          } else if (parsed.msgType === 'pc') {
+            onSwitchDown(sw.id, false);
+            setTimeout(() => onSwitchUp(sw.id), 45);
+          } else {
+            if (parsed.isPress) onSwitchDown(sw.id, parsed.allowHold);
+            else if (parsed.isRelease) onSwitchUp(sw.id);
+          }
+          break;
+        }
+      }
+
+      function normalizeTcInput(inputEl, stateKey) {
+        const parsed = parseTC(inputEl.value);
+        if (parsed) {
+          const fpsInt = getNominalFpsInt(getEffectiveFpsMode());
+          const formatted = formatTC(parsed.h, parsed.m, parsed.s, Math.min(parsed.f, fpsInt - 1));
+          inputEl.value = formatted;
+          state[stateKey] = formatted;
+          saveState();
+          syncCurrentSongFromState();
+          updateTargetScroll(true);
+          syncSimSliderBounds();
+        } else {
+          inputEl.value = state[stateKey];
+        }
+      }
+
+      inputStartTC.addEventListener('change', () => normalizeTcInput(inputStartTC, 'startTC'));
+      inputEndTC.addEventListener('change', () => normalizeTcInput(inputEndTC, 'endTC'));
+
+      fpsSelect.addEventListener('change', () => {
+        state.fpsSetting = fpsSelect.value;
+        saveState();
+        updateFpsReadout();
+        recalcCueTimes();
+      });
+
+      midiPortSelect.addEventListener('change', () => {
+        bindMidiInput(midiPortSelect.value);
+      });
+
+      btnRefreshMidi.addEventListener('click', () => {
+        if (!midiAccess) initMidi();
+        else populateMidiPorts();
+      });
+
+      mtcBpmIndicator.addEventListener('click', () => {
+        const now = performance.now();
+        if (tapTempoTimestamps.length > 0 && (now - tapTempoTimestamps[tapTempoTimestamps.length - 1]) > 2200) {
+          tapTempoTimestamps.length = 0;
+        }
+        tapTempoTimestamps.push(now);
+        if (tapTempoTimestamps.length > 6) {
+          tapTempoTimestamps.shift();
+        }
+        if (tapTempoTimestamps.length >= 2) {
+          const spanMs = tapTempoTimestamps[tapTempoTimestamps.length - 1] - tapTempoTimestamps[0];
+          const avgIntervalMs = spanMs / (tapTempoTimestamps.length - 1);
+          if (avgIntervalMs >= 200 && avgIntervalMs <= 2000) {
+            state.referenceBpm = Math.max(30, Math.min(300, Math.round(60000 / avgIntervalMs)));
+            saveState();
+          }
+        }
+        tapTempoFeedbackUntilMs = now + 900;
+        lastBpmDisplayKey = '';
+        updateBpmIndicator(now);
+      });
+
+      mtcBpmIndicator.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        tapTempoTimestamps.length = 0;
+        state.referenceBpm = 120;
+        saveState();
+        const now = performance.now();
+        tapTempoFeedbackUntilMs = now + 900;
+        lastBpmDisplayKey = '';
+        updateBpmIndicator(now);
+      });
+
+      fontSizeSlider.addEventListener('input', () => {
+        state.fontSize = Number(fontSizeSlider.value);
+        fontSizeVal.textContent = `${state.fontSize}px`;
+        saveState();
+        applyTypography();
+        measureCuePositions();
+        updateTargetScroll(true);
+      });
+
+      marginSlider.addEventListener('input', () => {
+        state.sideMargin = Number(marginSlider.value);
+        marginVal.textContent = `${state.sideMargin}%`;
+        saveState();
+        applyTypography();
+        measureCuePositions();
+        updateTargetScroll(true);
+      });
+
+      lineHeightSlider.addEventListener('input', () => {
+        state.lineHeight = Number(lineHeightSlider.value) / 100;
+        lineHeightVal.textContent = state.lineHeight.toFixed(2);
+        saveState();
+        applyTypography();
+        measureCuePositions();
+        updateTargetScroll(true);
+      });
+
+      function applyTextAlignUI() {
+        const current = (state.textAlign === 'center' || state.textAlign === 'justify') ? state.textAlign : 'left';
+        alignButtons.forEach((btn) => {
+          if (!btn) return;
+          const active = btn.dataset.align === current;
+          btn.classList.toggle('is-selected', active);
+          btn.setAttribute('aria-pressed', String(active));
+        });
+      }
+
+      function setTextAlign(align, persist) {
+        const valid = (align === 'center' || align === 'justify') ? align : 'left';
+        state.textAlign = valid;
+        if (persist) saveState();
+        applyTextAlignUI();
+        applyTypography();
+        measureCuePositions();
+        if (state.syncMode === 'AUTO') {
+          targetScrollY = Math.max(0, Math.min(maxScrollY, targetScrollY));
+          currentScrollY = Math.max(0, Math.min(maxScrollY, currentScrollY));
+          scriptTrack.style.transform = `translate3d(0, ${-currentScrollY}px, 0)`;
+        } else {
+          updateTargetScroll(true);
+        }
+      }
+
+      alignButtons.forEach((btn) => {
+        if (!btn) return;
+        btn.addEventListener('click', () => {
+          setTextAlign(btn.dataset.align, true);
+        });
+      });
+
+      function applyColorTheme() {
+        const inverted = Boolean(state.invertedColors);
+        document.body.classList.toggle('inverted-colors', inverted);
+        btnInvert.classList.toggle('is-active', inverted);
+        const themeMeta = document.querySelector('meta[name="theme-color"]');
+        if (themeMeta) {
+          themeMeta.setAttribute('content', inverted ? '#ffffff' : '#000000');
+        }
+      }
+
+      btnMirror.addEventListener('click', () => {
+        state.mirrored = !state.mirrored;
+        btnMirror.classList.toggle('is-active', state.mirrored);
+        saveState();
+        applyTypography();
+      });
+
+      btnInvert.addEventListener('click', () => {
+        state.invertedColors = !state.invertedColors;
+        saveState();
+        applyColorTheme();
+      });
+
+      btnAutohide.addEventListener('click', () => {
+        state.autoHide = !state.autoHide;
+        btnAutohide.classList.toggle('is-active', state.autoHide);
+        btnAutohide.textContent = `Auto-nascondi: ${state.autoHide ? 'ON' : 'OFF'}`;
+        saveState();
+        if (state.autoHide) scheduleAutoHide();
+        else clearTimeout(hudHideTimer);
+      });
+
+      /* Simulator Events */
+      btnSimToggle.addEventListener('click', () => {
+        const opening = !simPanel.classList.contains('is-open');
+        simPanel.classList.toggle('is-open', opening);
+        btnSimToggle.classList.toggle('is-active', opening);
+        if (opening) {
+          clearTimeout(hudHideTimer);
+          syncSimSliderBounds();
+        } else {
+          scheduleAutoHide();
+        }
+      });
+
+      btnSimPlay.addEventListener('click', () => {
+        if (simPlaying) stopSimulator();
+        else startSimulator();
+      });
+
+      btnSimStop.addEventListener('click', () => {
+        stopSimulator();
+      });
+
+      btnSimReset.addEventListener('click', () => {
+        stopSimulator();
+        const bounds = getSimBounds();
+        simCurrentSec = bounds.minSec;
+        const fpsMode = getEffectiveFpsMode();
+        const tcStr = secondsToTCString(simCurrentSec, fpsMode);
+        setLiveTimecode(simCurrentSec, tcStr, true);
+        syncSimSliderBounds();
+      });
+
+      function jumpSimulatorToInput() {
+        const parsed = parseTC(simJumpInput.value);
+        if (!parsed) {
+          simJumpInput.style.borderColor = 'var(--accent-red)';
+          setTimeout(() => { simJumpInput.style.borderColor = ''; }, 900);
+          simJumpInput.focus();
+          return;
+        }
+        const fpsMode = getEffectiveFpsMode();
+        const fpsInt = getNominalFpsInt(fpsMode);
+        const clamped = {
+          h: parsed.h,
+          m: parsed.m,
+          s: parsed.s,
+          f: Math.min(parsed.f, fpsInt - 1)
+        };
+        const formatted = formatTC(clamped.h, clamped.m, clamped.s, clamped.f);
+        const targetSec = framesToSeconds(tcObjToFrames(clamped, fpsMode), fpsMode);
+
+        simCurrentSec = targetSec;
+        simLastFrameMs = simPlaying ? performance.now() : 0;
+        simJumpInput.value = formatted;
+        simJumpInput.style.borderColor = '';
+        setLiveTimecode(simCurrentSec, formatted, true);
+        syncSimSliderBounds();
+      }
+
+      btnSimJump.addEventListener('click', jumpSimulatorToInput);
+      simJumpInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          jumpSimulatorToInput();
+          simJumpInput.blur();
+        }
+      });
+
+      simSlider.addEventListener('pointerdown', () => { simDragging = true; });
+      simSlider.addEventListener('pointerup', () => { simDragging = false; });
+      simSlider.addEventListener('input', () => {
+        const bounds = getSimBounds();
+        const ratio = Number(simSlider.value) / 1000;
+        simCurrentSec = bounds.minSec + ratio * (bounds.maxSec - bounds.minSec);
+        const fpsMode = getEffectiveFpsMode();
+        const tcStr = secondsToTCString(simCurrentSec, fpsMode);
+        simRangeLabel.textContent = tcStr;
+        if (document.activeElement !== simJumpInput) {
+          simJumpInput.value = tcStr;
+        }
+        setLiveTimecode(simCurrentSec, tcStr, true);
+      });
+
+      /* Script Presets (localStorage) */
+      let scriptPresets = loadPresets();
+      let presetFeedbackTimer = null;
+
+      function loadPresets() {
+        try {
+          const raw = localStorage.getItem(PRESETS_STORAGE_KEY);
+          if (!raw) {
+            const initial = DEFAULT_PRESETS.map((p) => ({ name: p.name, scriptText: p.scriptText }));
+            localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(initial));
+            return initial;
+          }
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (err) {
+          return DEFAULT_PRESETS.map((p) => ({ name: p.name, scriptText: p.scriptText }));
+        }
+      }
+
+      function savePresets() {
+        try {
+          localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(scriptPresets));
+        } catch (err) {
+          // Ignore quota errors
+        }
+      }
+
+      function showPresetFeedback(msg, isError) {
+        clearTimeout(presetFeedbackTimer);
+        presetFeedback.textContent = msg;
+        presetFeedback.style.color = isError ? 'var(--accent-red)' : '';
+        presetFeedbackTimer = setTimeout(() => {
+          presetFeedback.textContent = '';
+          presetFeedback.style.color = '';
+        }, 2200);
+      }
+
+      function renderPresetSelect(selectedName) {
+        const previousVal = selectedName !== undefined ? selectedName : presetSelect.value;
+        presetSelect.innerHTML = '';
+
+        if (scriptPresets.length === 0) {
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = '-- Nessun preset salvato --';
+          presetSelect.appendChild(opt);
+          presetNameInput.value = '';
+          return;
+        }
+
+        scriptPresets.forEach((preset) => {
+          const opt = document.createElement('option');
+          opt.value = preset.name;
+          opt.textContent = preset.name;
+          presetSelect.appendChild(opt);
+        });
+
+        const hasMatch = scriptPresets.some((p) => p.name === previousVal);
+        presetSelect.value = hasMatch ? previousVal : scriptPresets[0].name;
+        presetNameInput.value = presetSelect.value;
+      }
+
+      function loadSelectedPresetIntoEditor() {
+        const name = presetSelect.value;
+        const found = scriptPresets.find((p) => p.name === name);
+        if (!found) {
+          showPresetFeedback('Nessun preset selezionato.', true);
+          return;
+        }
+        scriptTextarea.value = found.scriptText;
+        presetNameInput.value = found.name;
+        showPresetFeedback(`Preset "${found.name}" caricato nell'editor.`, false);
+      }
+
+      presetSelect.addEventListener('change', () => {
+        if (presetSelect.value) {
+          presetNameInput.value = presetSelect.value;
+        }
+      });
+
+      btnPresetLoad.addEventListener('click', loadSelectedPresetIntoEditor);
+
+      btnPresetSave.addEventListener('click', () => {
+        const name = presetNameInput.value.trim();
+        if (!name) {
+          showPresetFeedback('Inserisci un nome per il preset.', true);
+          presetNameInput.focus();
+          return;
+        }
+        const existingIdx = scriptPresets.findIndex((p) => p.name.toLowerCase() === name.toLowerCase());
+        const entry = { name, scriptText: scriptTextarea.value };
+        if (existingIdx >= 0) {
+          scriptPresets[existingIdx] = entry;
+        } else {
+          scriptPresets.push(entry);
+        }
+        savePresets();
+        renderPresetSelect(name);
+        showPresetFeedback(`Preset "${name}" salvato nel dispositivo.`, false);
+      });
+
+      btnPresetDelete.addEventListener('click', () => {
+        const name = presetSelect.value;
+        if (!name) {
+          showPresetFeedback('Nessun preset da eliminare.', true);
+          return;
+        }
+        scriptPresets = scriptPresets.filter((p) => p.name !== name);
+        savePresets();
+        renderPresetSelect('');
+        showPresetFeedback(`Preset "${name}" eliminato.`, false);
+      });
+
+      /* Editor Modal */
+      btnEditor.addEventListener('click', () => {
+        scriptTextarea.value = state.scriptText;
+        renderPresetSelect();
+        presetFeedback.textContent = '';
+        editorModal.classList.add('is-open');
+        clearTimeout(hudHideTimer);
+      });
+
+      btnCloseEditor.addEventListener('click', () => {
+        editorModal.classList.remove('is-open');
+        scheduleAutoHide();
+      });
+
+      btnSaveEditor.addEventListener('click', () => {
+        state.scriptText = scriptTextarea.value;
+        saveState();
+        syncCurrentSongFromState();
+        editorModal.classList.remove('is-open');
+        renderScript();
+        scheduleAutoHide();
+      });
+
+      btnLoadSample.addEventListener('click', () => {
+        scriptTextarea.value = SAMPLE_SCRIPT;
+      });
+
+      btnClearScript.addEventListener('click', () => {
+        scriptTextarea.value = '';
+        scriptTextarea.focus();
+      });
+
+      /* Help Modal */
+      btnHelp.addEventListener('click', () => {
+        updateExportLogButtonLabel();
+        helpModal.classList.add('is-open');
+        clearTimeout(hudHideTimer);
+      });
+
+      btnExportMtcLog.addEventListener('click', exportMtcLog);
+
+      [btnCloseHelp, btnCloseHelpFooter].forEach((b) => {
+        b.addEventListener('click', () => {
+          helpModal.classList.remove('is-open');
+          scheduleAutoHide();
+        });
+      });
+
+      /* Cue Marker Sidebar */
+      function setCueSidebarOpen(open) {
+        cueSidebar.classList.toggle('is-open', open);
+        cueSidebarBackdrop.classList.toggle('is-open', open);
+        btnCueSidebar.classList.toggle('is-active', open);
+        if (open) {
+          clearTimeout(hudHideTimer);
+          updateActiveCueHighlight();
+        } else {
+          scheduleAutoHide();
+        }
+      }
+
+      btnCueSidebar.addEventListener('click', () => {
+        setCueSidebarOpen(!cueSidebar.classList.contains('is-open'));
+      });
+
+      btnCloseCueSidebar.addEventListener('click', () => setCueSidebarOpen(false));
+      cueSidebarBackdrop.addEventListener('click', () => setCueSidebarOpen(false));
+
+      /* ---------------- Setlist (Scalette) Management System ---------------- */
+      let setlistFeedbackTimer = null;
+      let setlistNameMode = 'new'; // 'new' | 'rename'
+      let editingSongId = null;
+      let draggedSongId = null;
+      let isAutoSwitching = false;
+
+      function makeId(prefix) {
+        return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+      }
+
+      function createDefaultSetlistStore() {
+        const sl1 = {
+          id: 'sl-tour-2026',
+          name: 'Concerto Tour 2026',
+          songs: [
+            {
+              id: 'song-tour-1',
+              title: '01 - Sigla & Apertura',
+              syncMode: 'B',
+              startTC: '01:00:00:00',
+              endTC: '01:00:45:00',
+              scriptText: SAMPLE_SCRIPT
+            },
+            {
+              id: 'song-tour-2',
+              title: '02 - Brano Principale',
+              syncMode: 'A',
+              startTC: '01:01:00:00',
+              endTC: '01:04:00:00',
+              scriptText: `Questa sera il palco si illumina con un nuovo viaggio musicale.
+
+Seguite il respiro della sezione ritmica e tenete lo sguardo sulla linea rossa centrale.
+
+Sul ritornello apriamo al pubblico in sala e lasciamo spazio al solo finale.`
+            },
+            {
+              id: 'song-tour-3',
+              title: '03 - Gran Finale',
+              syncMode: 'B',
+              startTC: '01:05:00:00',
+              endTC: '01:06:15:00',
+              scriptText: `[01:05:00:00] ATTACCO FINALE
+Grazie a tutta la città per essere stata con noi questa sera!
+
+[01:05:25:00] PRESENTAZIONE BAND
+Un applauso ai musicisti sul palco e alla squadra tecnica in regia.
+
+[01:05:50:00] SALUTO CONCLUSIVO
+Buonanotte e alla prossima tappa del tour!`
+            }
+          ]
+        };
+
+        const sl2 = {
+          id: 'sl-doppiaggio-ep1',
+          name: 'Doppiaggio Ep. 1',
+          songs: [
+            {
+              id: 'song-dub-1',
+              title: 'Scena 01 - Prologo',
+              syncMode: 'B',
+              startTC: '01:00:00:00',
+              endTC: '01:00:35:00',
+              scriptText: `[01:00:00:00] NARRATORE (F.C.)
+Era una notte silenziosa quando le luci dello studio si accesero una ad una.
+
+[01:00:15:00] MARCO
+Non c'è più tempo da perdere, dobbiamo avviare la registrazione ora.`
+            },
+            {
+              id: 'song-dub-2',
+              title: 'Scena 02 - Dialogo Regia',
+              syncMode: 'B',
+              startTC: '01:02:00:00',
+              endTC: '01:02:40:00',
+              scriptText: `[01:02:00:00] ELENA
+Timecode agganciato. Siamo perfettamente in sincrono con Nuendo.
+
+[01:02:20:00] MARCO
+Perfetto, buona la prima!`
+            }
+          ]
+        };
+
+        const sl3 = {
+          id: 'sl-prove-studio',
+          name: 'Prove Studio',
+          songs: [
+            {
+              id: 'song-prove-1',
+              title: 'Check Lineare Start/End',
+              syncMode: 'A',
+              startTC: '01:00:00:00',
+              endTC: '01:01:30:00',
+              scriptText: `Test di scorrimento lineare tra Start TC e End TC.
+
+Verifica dimensioni font, margini laterali e ribaltamento specchio prima della registrazione ufficiale.`
+            }
+          ]
+        };
+
+        return {
+          activeSetlistId: sl1.id,
+          activeSongId: sl1.songs[0].id,
+          autoSwitchMtc: false,
+          setlists: [sl1, sl2, sl3]
+        };
+      }
+
+      function normalizeSetlistStore(rawStore) {
+        if (!rawStore || !Array.isArray(rawStore.setlists) || rawStore.setlists.length === 0) {
+          return createDefaultSetlistStore();
+        }
+        const cleaned = rawStore.setlists.map((sl, idx) => ({
+          id: String(sl.id || makeId(`sl${idx}`)),
+          name: String(sl.name || `Setlist ${idx + 1}`).trim() || `Setlist ${idx + 1}`,
+          songs: Array.isArray(sl.songs) ? sl.songs.map((sg, sIdx) => ({
+            id: String(sg.id || makeId(`song${sIdx}`)),
+            title: String(sg.title || `Brano ${sIdx + 1}`).trim() || `Brano ${sIdx + 1}`,
+            syncMode: sg.syncMode === 'A' ? 'A' : (sg.syncMode === 'AUTO' ? 'AUTO' : 'B'),
+            startTC: parseTC(sg.startTC) ? sg.startTC : '01:00:00:00',
+            endTC: parseTC(sg.endTC) ? sg.endTC : '01:03:00:00',
+            scriptText: String(sg.scriptText ?? '')
+          })) : []
+        }));
+
+        const activeSl = cleaned.find((s) => s.id === rawStore.activeSetlistId) || cleaned[0];
+        const activeSong = activeSl.songs.find((sg) => sg.id === rawStore.activeSongId) || activeSl.songs[0] || null;
+        return {
+          activeSetlistId: activeSl.id,
+          activeSongId: activeSong ? activeSong.id : null,
+          autoSwitchMtc: Boolean(rawStore.autoSwitchMtc),
+          setlists: cleaned
+        };
+      }
+
+      function loadSetlistStore() {
+        try {
+          const raw = localStorage.getItem(SETLISTS_STORAGE_KEY);
+          if (!raw) {
+            const initial = createDefaultSetlistStore();
+            localStorage.setItem(SETLISTS_STORAGE_KEY, JSON.stringify(initial));
+            return initial;
+          }
+          return normalizeSetlistStore(JSON.parse(raw));
+        } catch (err) {
+          return createDefaultSetlistStore();
+        }
+      }
+
+      let setlistStore = loadSetlistStore();
+
+      function saveSetlistStore() {
+        try {
+          localStorage.setItem(SETLISTS_STORAGE_KEY, JSON.stringify(setlistStore));
+        } catch (err) {
+          // Ignore quota errors
+        }
+      }
+
+      function getActiveSetlist() {
+        return setlistStore.setlists.find((s) => s.id === setlistStore.activeSetlistId) || setlistStore.setlists[0];
+      }
+
+      function getActiveSongIndex() {
+        const sl = getActiveSetlist();
+        if (!sl) return -1;
+        return sl.songs.findIndex((sg) => sg.id === setlistStore.activeSongId);
+      }
+
+      function showSetlistFeedback(msg, isError) {
+        clearTimeout(setlistFeedbackTimer);
+        setlistFeedback.textContent = msg;
+        setlistFeedback.style.color = isError ? 'var(--accent-red)' : '';
+        setlistFeedbackTimer = setTimeout(() => {
+          setlistFeedback.textContent = '';
+          setlistFeedback.style.color = '';
+        }, 2800);
+      }
+
+      function syncCurrentSongFromState() {
+        const sl = getActiveSetlist();
+        if (!sl) return;
+        const song = sl.songs.find((sg) => sg.id === setlistStore.activeSongId);
+        if (!song) return;
+        song.scriptText = state.scriptText;
+        song.syncMode = state.syncMode;
+        song.startTC = state.startTC;
+        song.endTC = state.endTC;
+        saveSetlistStore();
+        renderSetlistSongsList();
+      }
+
+      function getSongTimeIntervalSec(song, fpsMode) {
+        let sSec = tcStrToSeconds(song.startTC, fpsMode);
+        let eSec = tcStrToSeconds(song.endTC, fpsMode);
+
+        if ((sSec === null || eSec === null || eSec <= sSec) && song.syncMode === 'B') {
+          const matches = Array.from(String(song.scriptText || '').matchAll(/\[(\d{1,2}:\d{2}:\d{2}:\d{2})\]/g));
+          if (matches.length >= 1) {
+            const firstSec = tcStrToSeconds(matches[0][1], fpsMode);
+            const lastSec = tcStrToSeconds(matches[matches.length - 1][1], fpsMode);
+            if (firstSec !== null) sSec = firstSec;
+            if (lastSec !== null) eSec = Math.max(firstSec + 10, lastSec + 10);
+          }
+        }
+        if (sSec === null || eSec === null || eSec < sSec) return null;
+        return { startSec: sSec, endSec: eSec };
+      }
+
+      function checkAutoSwitchFromMtc(timeSec) {
+        const sl = getActiveSetlist();
+        if (!sl || sl.songs.length === 0) return;
+        const fpsMode = getEffectiveFpsMode();
+
+        for (let i = 0; i < sl.songs.length; i++) {
+          const song = sl.songs[i];
+          const range = getSongTimeIntervalSec(song, fpsMode);
+          if (range && timeSec >= range.startSec && timeSec <= range.endSec) {
+            if (song.id !== setlistStore.activeSongId) {
+              isAutoSwitching = true;
+              loadSong(song, { preserveCurrentTime: true });
+              isAutoSwitching = false;
+            }
+            break;
+          }
+        }
+      }
+
+      function loadSong(song, options) {
+        if (!song) return;
+        const opts = options || {};
+        setlistStore.activeSongId = song.id;
+        saveSetlistStore();
+
+        stopAutoScroll();
+        state.scriptText = song.scriptText;
+        state.syncMode = song.syncMode === 'A' ? 'A' : (song.syncMode === 'AUTO' ? 'AUTO' : 'B');
+        state.startTC = song.startTC || '01:00:00:00';
+        state.endTC = song.endTC || '01:03:00:00';
+        saveState();
+
+        inputStartTC.value = state.startTC;
+        inputEndTC.value = state.endTC;
+        applySyncModeUI();
+        renderScript();
+
+        if (state.syncMode === 'AUTO') {
+          if (!opts.preserveCurrentTime) {
+            targetScrollY = 0;
+            currentScrollY = 0;
+            scriptTrack.style.transform = 'translate3d(0, 0px, 0)';
+          }
+        } else if (!opts.preserveCurrentTime) {
+          const fpsMode = getEffectiveFpsMode();
+          const startSec = tcStrToSeconds(state.startTC, fpsMode) ?? 3600;
+          currentTimeSec = startSec;
+          prevTimeSec = startSec;
+          simCurrentSec = startSec;
+          tcDisplay.textContent = secondsToTCString(startSec, fpsMode);
+          updateTargetScroll(true);
+          syncSimSliderBounds();
+        } else {
+          updateTargetScroll(true);
+        }
+
+        updateActiveCueHighlight();
+        updateSetlistNavigationUI();
+        renderSetlistSongsList();
+      }
+
+      function updateSetlistNavigationUI() {
+        const sl = getActiveSetlist();
+        const idx = getActiveSongIndex();
+        const total = sl ? sl.songs.length : 0;
+
+        if (!sl || total === 0) {
+          activeSongIndicator.textContent = `${sl ? sl.name : 'Setlist'} · Nessun brano`;
+          activeSongMeta.textContent = sl ? sl.name : 'Nessuna setlist';
+          btnPrevSong.disabled = true;
+          btnNextSong.disabled = true;
+          return;
+        }
+
+        const activeSong = idx >= 0 ? sl.songs[idx] : sl.songs[0];
+        const displayPos = idx >= 0 ? idx + 1 : 1;
+        activeSongIndicator.textContent = `${sl.name} · ${displayPos}/${total} · ${activeSong.title}`;
+        activeSongMeta.textContent = `${activeSong.title} (${displayPos}/${total})`;
+        btnPrevSong.disabled = idx <= 0;
+        btnNextSong.disabled = idx < 0 || idx >= total - 1;
+      }
+
+      function renderSetlistSelect() {
+        setlistSelect.innerHTML = '';
+        setlistStore.setlists.forEach((sl) => {
+          const opt = document.createElement('option');
+          opt.value = sl.id;
+          opt.textContent = `${sl.name} (${sl.songs.length})`;
+          setlistSelect.appendChild(opt);
+        });
+        setlistSelect.value = setlistStore.activeSetlistId;
+        btnSetlistDelete.disabled = setlistStore.setlists.length <= 1;
+      }
+
+      function updateAutoswitchButtonUI() {
+        const on = Boolean(setlistStore.autoSwitchMtc);
+        btnAutoswitchMtc.classList.toggle('is-active', on);
+        btnAutoswitchMtc.textContent = `Auto-switch da MTC: ${on ? 'ON' : 'OFF'}`;
+      }
+
+      function moveSongInSetlist(fromIdx, toIdx) {
+        const sl = getActiveSetlist();
+        if (!sl || fromIdx < 0 || toIdx < 0 || fromIdx >= sl.songs.length || toIdx >= sl.songs.length || fromIdx === toIdx) return;
+        const [moved] = sl.songs.splice(fromIdx, 1);
+        sl.songs.splice(toIdx, 0, moved);
+        saveSetlistStore();
+        renderSetlistSongsList();
+        updateSetlistNavigationUI();
+      }
+
+      function openSongForm(songToEdit) {
+        if (songToEdit) {
+          editingSongId = songToEdit.id;
+          songTitleInput.value = songToEdit.title;
+          songModeSelect.value = songToEdit.syncMode === 'A' ? 'A' : (songToEdit.syncMode === 'AUTO' ? 'AUTO' : 'B');
+          songStartInput.value = songToEdit.startTC;
+          songEndInput.value = songToEdit.endTC;
+          songTextInput.value = songToEdit.scriptText;
+          btnSongSave.textContent = 'Aggiorna Brano';
+        } else {
+          editingSongId = null;
+          const sl = getActiveSetlist();
+          const num = sl ? sl.songs.length + 1 : 1;
+          songTitleInput.value = `Brano ${String(num).padStart(2, '0')}`;
+          songModeSelect.value = state.syncMode;
+          songStartInput.value = state.startTC;
+          songEndInput.value = state.endTC;
+          songTextInput.value = '';
+          btnSongSave.textContent = 'Salva Brano';
+        }
+        songFormCard.classList.remove('hidden');
+        songTitleInput.focus();
+      }
+
+      function closeSongForm() {
+        editingSongId = null;
+        songFormCard.classList.add('hidden');
+      }
+
+      function renderSetlistSongsList() {
+        const sl = getActiveSetlist();
+        setlistSongsList.innerHTML = '';
+        if (!sl || sl.songs.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'cue-sidebar-empty';
+          empty.textContent = 'Nessun brano in questa setlist. Premi "+ Nuovo Brano" per aggiungerne uno.';
+          setlistSongsList.appendChild(empty);
+          return;
+        }
+
+        sl.songs.forEach((song, idx) => {
+          const card = document.createElement('div');
+          card.className = 'song-card';
+          if (song.id === setlistStore.activeSongId) card.classList.add('is-active');
+          card.draggable = true;
+          card.dataset.songId = song.id;
+
+          card.addEventListener('dragstart', (e) => {
+            draggedSongId = song.id;
+            card.classList.add('is-dragging');
+            if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+          });
+          card.addEventListener('dragend', () => {
+            draggedSongId = null;
+            card.classList.remove('is-dragging');
+            setlistSongsList.querySelectorAll('.song-card').forEach((c) => c.classList.remove('is-drag-over'));
+          });
+          card.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (draggedSongId && draggedSongId !== song.id) {
+              card.classList.add('is-drag-over');
+            }
+          });
+          card.addEventListener('dragleave', () => {
+            card.classList.remove('is-drag-over');
+          });
+          card.addEventListener('drop', (e) => {
+            e.preventDefault();
+            card.classList.remove('is-drag-over');
+            if (!draggedSongId || draggedSongId === song.id) return;
+            const fromIdx = sl.songs.findIndex((s) => s.id === draggedSongId);
+            const toIdx = sl.songs.findIndex((s) => s.id === song.id);
+            moveSongInSetlist(fromIdx, toIdx);
+          });
+
+          const mainRow = document.createElement('div');
+          mainRow.className = 'song-card-main';
+          mainRow.title = 'Tocca per caricare questo brano nel Teleprompter';
+          mainRow.addEventListener('click', () => {
+            loadSong(song, { preserveCurrentTime: false });
+          });
+
+          const info = document.createElement('div');
+          info.className = 'song-card-info';
+
+          const titleEl = document.createElement('div');
+          titleEl.className = 'song-card-title';
+          titleEl.textContent = `${idx + 1}. ${song.title}`;
+
+          const metaEl = document.createElement('div');
+          metaEl.className = 'song-card-meta';
+          const modeLabel = song.syncMode === 'A' ? 'Start/End' : (song.syncMode === 'AUTO' ? 'Auto-Scroll px/s' : 'Marker');
+          metaEl.textContent = song.syncMode === 'AUTO' ? `${modeLabel} · ${state.autoScrollSpeedPx} px/s` : `${modeLabel} · ${song.startTC} → ${song.endTC}`;
+
+          info.appendChild(titleEl);
+          info.appendChild(metaEl);
+
+          const loadTag = document.createElement('span');
+          loadTag.className = 'btn btn-mini';
+          loadTag.textContent = song.id === setlistStore.activeSongId ? 'In onda' : 'Carica';
+          if (song.id === setlistStore.activeSongId) loadTag.classList.add('is-active');
+
+          mainRow.appendChild(info);
+          mainRow.appendChild(loadTag);
+
+          const actions = document.createElement('div');
+          actions.className = 'song-card-actions';
+
+          const btnUp = document.createElement('button');
+          btnUp.type = 'button';
+          btnUp.className = 'btn btn-mini';
+          btnUp.textContent = 'Su ↑';
+          btnUp.disabled = idx === 0;
+          btnUp.addEventListener('click', (e) => {
+            e.stopPropagation();
+            moveSongInSetlist(idx, idx - 1);
+          });
+
+          const btnDown = document.createElement('button');
+          btnDown.type = 'button';
+          btnDown.className = 'btn btn-mini';
+          btnDown.textContent = 'Giù ↓';
+          btnDown.disabled = idx === sl.songs.length - 1;
+          btnDown.addEventListener('click', (e) => {
+            e.stopPropagation();
+            moveSongInSetlist(idx, idx + 1);
+          });
+
+          const btnEdit = document.createElement('button');
+          btnEdit.type = 'button';
+          btnEdit.className = 'btn btn-mini';
+          btnEdit.textContent = 'Modifica';
+          btnEdit.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openSongForm(song);
+          });
+
+          const btnDel = document.createElement('button');
+          btnDel.type = 'button';
+          btnDel.className = 'btn btn-mini btn-danger';
+          btnDel.textContent = 'Elimina';
+          btnDel.addEventListener('click', (e) => {
+            e.stopPropagation();
+            sl.songs = sl.songs.filter((s) => s.id !== song.id);
+            if (setlistStore.activeSongId === song.id) {
+              setlistStore.activeSongId = sl.songs[0] ? sl.songs[0].id : null;
+              if (sl.songs[0]) loadSong(sl.songs[0], { preserveCurrentTime: false });
+            }
+            saveSetlistStore();
+            renderSetlistSelect();
+            renderSetlistSongsList();
+            updateSetlistNavigationUI();
+          });
+
+          actions.appendChild(btnUp);
+          actions.appendChild(btnDown);
+          actions.appendChild(btnEdit);
+          actions.appendChild(btnDel);
+
+          card.appendChild(mainRow);
+          card.appendChild(actions);
+          setlistSongsList.appendChild(card);
+        });
+      }
+
+      function setSetlistDrawerOpen(open) {
+        setlistDrawer.classList.toggle('is-open', open);
+        setlistDrawerBackdrop.classList.toggle('is-open', open);
+        btnSetlistDrawer.classList.toggle('is-active', open);
+        if (open) {
+          clearTimeout(hudHideTimer);
+          renderSetlistSelect();
+          renderSetlistSongsList();
+          updateAutoswitchButtonUI();
+        } else {
+          closeSongForm();
+          setlistNameForm.classList.add('hidden');
+          scheduleAutoHide();
+        }
+      }
+
+      btnSetlistDrawer.addEventListener('click', () => {
+        setSetlistDrawerOpen(!setlistDrawer.classList.contains('is-open'));
+      });
+      btnCloseSetlistDrawer.addEventListener('click', () => setSetlistDrawerOpen(false));
+      setlistDrawerBackdrop.addEventListener('click', () => setSetlistDrawerOpen(false));
+
+      btnPrevSong.addEventListener('click', goToPrevSong);
+      btnNextSong.addEventListener('click', goToNextSong);
+
+      setlistSelect.addEventListener('change', () => {
+        const nextSl = setlistStore.setlists.find((s) => s.id === setlistSelect.value);
+        if (!nextSl) return;
+        setlistStore.activeSetlistId = nextSl.id;
+        setlistStore.activeSongId = nextSl.songs[0] ? nextSl.songs[0].id : null;
+        saveSetlistStore();
+        closeSongForm();
+        if (nextSl.songs[0]) {
+          loadSong(nextSl.songs[0], { preserveCurrentTime: false });
+        } else {
+          updateSetlistNavigationUI();
+          renderSetlistSongsList();
+        }
+      });
+
+      btnSetlistNew.addEventListener('click', () => {
+        setlistNameMode = 'new';
+        setlistNameInput.value = '';
+        setlistNameForm.classList.remove('hidden');
+        setlistNameInput.focus();
+      });
+
+      btnSetlistRename.addEventListener('click', () => {
+        const sl = getActiveSetlist();
+        if (!sl) return;
+        setlistNameMode = 'rename';
+        setlistNameInput.value = sl.name;
+        setlistNameForm.classList.remove('hidden');
+        setlistNameInput.focus();
+      });
+
+      btnSetlistNameCancel.addEventListener('click', () => {
+        setlistNameForm.classList.add('hidden');
+      });
+
+      btnSetlistNameSave.addEventListener('click', () => {
+        const name = setlistNameInput.value.trim();
+        if (!name) {
+          showSetlistFeedback('Inserisci un nome valido per la setlist.', true);
+          return;
+        }
+        if (setlistNameMode === 'new') {
+          const newSl = {
+            id: makeId('sl'),
+            name,
+            songs: []
+          };
+          setlistStore.setlists.push(newSl);
+          setlistStore.activeSetlistId = newSl.id;
+          setlistStore.activeSongId = null;
+          saveSetlistStore();
+          showSetlistFeedback(`Setlist "${name}" creata.`, false);
+        } else {
+          const sl = getActiveSetlist();
+          if (sl) {
+            sl.name = name;
+            saveSetlistStore();
+            showSetlistFeedback(`Setlist rinominata in "${name}".`, false);
+          }
+        }
+        setlistNameForm.classList.add('hidden');
+        renderSetlistSelect();
+        renderSetlistSongsList();
+        updateSetlistNavigationUI();
+      });
+
+      btnSetlistDuplicate.addEventListener('click', () => {
+        const sl = getActiveSetlist();
+        if (!sl) return;
+        const copy = {
+          id: makeId('sl'),
+          name: `${sl.name} (Copia)`,
+          songs: sl.songs.map((sg) => Object.assign({}, sg, { id: makeId('song') }))
+        };
+        setlistStore.setlists.push(copy);
+        setlistStore.activeSetlistId = copy.id;
+        setlistStore.activeSongId = copy.songs[0] ? copy.songs[0].id : null;
+        saveSetlistStore();
+        renderSetlistSelect();
+        if (copy.songs[0]) loadSong(copy.songs[0], { preserveCurrentTime: false });
+        else {
+          renderSetlistSongsList();
+          updateSetlistNavigationUI();
+        }
+        showSetlistFeedback(`Setlist duplicata: "${copy.name}".`, false);
+      });
+
+      btnSetlistDelete.addEventListener('click', () => {
+        if (setlistStore.setlists.length <= 1) {
+          showSetlistFeedback('Deve rimanere almeno una setlist in archivio.', true);
+          return;
+        }
+        const sl = getActiveSetlist();
+        if (!sl) return;
+        const deletedName = sl.name;
+        setlistStore.setlists = setlistStore.setlists.filter((s) => s.id !== sl.id);
+        const nextSl = setlistStore.setlists[0];
+        setlistStore.activeSetlistId = nextSl.id;
+        setlistStore.activeSongId = nextSl.songs[0] ? nextSl.songs[0].id : null;
+        saveSetlistStore();
+        renderSetlistSelect();
+        if (nextSl.songs[0]) loadSong(nextSl.songs[0], { preserveCurrentTime: false });
+        else {
+          renderSetlistSongsList();
+          updateSetlistNavigationUI();
+        }
+        showSetlistFeedback(`Setlist "${deletedName}" eliminata.`, false);
+      });
+
+      btnAutoswitchMtc.addEventListener('click', () => {
+        setlistStore.autoSwitchMtc = !setlistStore.autoSwitchMtc;
+        saveSetlistStore();
+        updateAutoswitchButtonUI();
+        showSetlistFeedback(
+          setlistStore.autoSwitchMtc ? 'Auto-switch da MTC attivato.' : 'Auto-switch da MTC disattivato.',
+          false
+        );
+      });
+
+      btnAddSongToggle.addEventListener('click', () => {
+        if (songFormCard.classList.contains('hidden')) openSongForm(null);
+        else closeSongForm();
+      });
+
+      btnSongCancel.addEventListener('click', closeSongForm);
+
+      btnSongSave.addEventListener('click', () => {
+        const sl = getActiveSetlist();
+        if (!sl) return;
+        const title = songTitleInput.value.trim() || 'Brano senza titolo';
+        const mode = songModeSelect.value === 'A' ? 'A' : (songModeSelect.value === 'AUTO' ? 'AUTO' : 'B');
+        const parsedStart = parseTC(songStartInput.value);
+        const parsedEnd = parseTC(songEndInput.value);
+        const fpsInt = getNominalFpsInt(getEffectiveFpsMode());
+        const startTC = parsedStart
+          ? formatTC(parsedStart.h, parsedStart.m, parsedStart.s, Math.min(parsedStart.f, fpsInt - 1))
+          : '01:00:00:00';
+        const endTC = parsedEnd
+          ? formatTC(parsedEnd.h, parsedEnd.m, parsedEnd.s, Math.min(parsedEnd.f, fpsInt - 1))
+          : '01:03:00:00';
+        const scriptText = songTextInput.value;
+
+        if (editingSongId) {
+          const target = sl.songs.find((s) => s.id === editingSongId);
+          if (target) {
+            target.title = title;
+            target.syncMode = mode;
+            target.startTC = startTC;
+            target.endTC = endTC;
+            target.scriptText = scriptText;
+            saveSetlistStore();
+            if (setlistStore.activeSongId === target.id) {
+              loadSong(target, { preserveCurrentTime: false });
+            }
+            showSetlistFeedback(`Brano "${title}" aggiornato.`, false);
+          }
+        } else {
+          const newSong = {
+            id: makeId('song'),
+            title,
+            syncMode: mode,
+            startTC,
+            endTC,
+            scriptText
+          };
+          sl.songs.push(newSong);
+          saveSetlistStore();
+          loadSong(newSong, { preserveCurrentTime: false });
+          showSetlistFeedback(`Brano "${title}" aggiunto alla setlist.`, false);
+        }
+
+        closeSongForm();
+        renderSetlistSelect();
+        renderSetlistSongsList();
+        updateSetlistNavigationUI();
+      });
+
+      /* Backup JSON Export / Import */
+      btnExportSetlists.addEventListener('click', () => {
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+        const payload = {
+          version: 3,
+          exportedAt: now.toISOString(),
+          activeSetlistId: setlistStore.activeSetlistId,
+          activeSongId: setlistStore.activeSongId,
+          autoSwitchMtc: setlistStore.autoSwitchMtc,
+          autoScrollSpeedPx: state.autoScrollSpeedPx,
+          textAlign: state.textAlign,
+          pedalMapping2Sw: pedalConfig,
+          setlists: setlistStore.setlists
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `mtc-setlist-backup-${stamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showSetlistFeedback('Backup JSON (Setlist + Pedale) esportato con successo.', false);
+      });
+
+      btnImportSetlists.addEventListener('click', () => {
+        importSetlistsFile.value = '';
+        importSetlistsFile.click();
+      });
+
+      importSetlistsFile.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const parsed = JSON.parse(String(reader.result || ''));
+            if (!parsed || !Array.isArray(parsed.setlists) || parsed.setlists.length === 0) {
+              showSetlistFeedback('File backup non valido: nessuna setlist trovata.', true);
+              return;
+            }
+            setlistStore = normalizeSetlistStore(parsed);
+            saveSetlistStore();
+            if (typeof parsed.autoScrollSpeedPx === 'number') {
+              setAutoScrollSpeedPx(parsed.autoScrollSpeedPx, true);
+            }
+            if (parsed.textAlign === 'left' || parsed.textAlign === 'center' || parsed.textAlign === 'justify') {
+              setTextAlign(parsed.textAlign, true);
+            }
+            if (parsed.pedalMapping2Sw) {
+              pedalConfig = normalizePedalConfig(parsed.pedalMapping2Sw);
+              savePedalConfig();
+              syncPedalSpeedControls();
+              renderPedalMappingList();
+            }
+            renderSetlistSelect();
+            updateAutoswitchButtonUI();
+            const sl = getActiveSetlist();
+            const activeSong = sl && (sl.songs.find((s) => s.id === setlistStore.activeSongId) || sl.songs[0]);
+            if (activeSong) loadSong(activeSong, { preserveCurrentTime: false });
+            else {
+              renderSetlistSongsList();
+              updateSetlistNavigationUI();
+            }
+            const extraMsg = parsed.pedalMapping2Sw ? ' e configurazione pedale 2 tasti' : '';
+            showSetlistFeedback(`Importate ${setlistStore.setlists.length} setlist${extraMsg} dal backup.`, false);
+          } catch (err) {
+            showSetlistFeedback('Errore nella lettura del file JSON di backup.', true);
+          }
+        };
+        reader.readAsText(file);
+      });
+
+      /* Resize / Orientation Change */
+      window.addEventListener('resize', () => {
+        renderScript();
+      });
+
+      /* ---------------- PWA Install & Offline & SW Registration ---------------- */
+      function updateOnlineStatus() {
+        offlineBanner.classList.toggle('is-visible', !navigator.onLine);
+      }
+      window.addEventListener('online', updateOnlineStatus);
+      window.addEventListener('offline', updateOnlineStatus);
+      updateOnlineStatus();
+
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      const isIOS = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+      if (isIOS && !isStandalone) {
+        iosInstallNote.classList.remove('hidden');
+      }
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+        if (!isStandalone) {
+          btnInstall.classList.remove('hidden');
+        }
+      });
+
+      window.addEventListener('appinstalled', () => {
+        deferredInstallPrompt = null;
+        btnInstall.classList.add('hidden');
+      });
+
+      btnInstall.addEventListener('click', async () => {
+        if (!deferredInstallPrompt) return;
+        await deferredInstallPrompt.prompt();
+        const choice = await deferredInstallPrompt.userChoice;
+        if (choice && choice.outcome === 'accepted') {
+          btnInstall.classList.add('hidden');
+        }
+        deferredInstallPrompt = null;
+      });
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('sw.js').catch(() => {});
+        });
+      }
+
+      /* ---------------- Initial Hydration ---------------- */
+      function hydrateUI() {
+        inputStartTC.value = state.startTC;
+        inputEndTC.value = state.endTC;
+        fpsSelect.value = state.fpsSetting;
+
+        fontSizeSlider.value = String(state.fontSize);
+        fontSizeVal.textContent = `${state.fontSize}px`;
+
+        marginSlider.value = String(state.sideMargin);
+        marginVal.textContent = `${state.sideMargin}%`;
+
+        lineHeightSlider.value = String(Math.round(state.lineHeight * 100));
+        lineHeightVal.textContent = state.lineHeight.toFixed(2);
+        applyTextAlignUI();
+
+        btnMirror.classList.toggle('is-active', Boolean(state.mirrored));
+        applyColorTheme();
+        btnAutohide.classList.toggle('is-active', Boolean(state.autoHide));
+        btnAutohide.textContent = `Auto-nascondi: ${state.autoHide ? 'ON' : 'OFF'}`;
+        setAutoScrollSpeedPx(state.autoScrollSpeedPx, false);
+        updateAutoPlayButtonUI();
+        syncPedalSpeedControls();
+        renderPedalMappingList();
+        updatePedalMidiBanner();
+
+        const activeSl = getActiveSetlist();
+        const activeSong = activeSl && (activeSl.songs.find((s) => s.id === setlistStore.activeSongId) || activeSl.songs[0]);
+        if (activeSong && !localStorage.getItem(STORAGE_KEY)) {
+          loadSong(activeSong, { preserveCurrentTime: false });
+        } else {
+          const startSec = tcStrToSeconds(state.startTC, getEffectiveFpsMode()) ?? 3600;
+          currentTimeSec = startSec;
+          prevTimeSec = startSec;
+          simCurrentSec = startSec;
+          tcDisplay.textContent = secondsToTCString(startSec, getEffectiveFpsMode());
+          applySyncModeUI();
+          updateFpsReadout();
+          renderScript();
+        }
+        renderSetlistSelect();
+        renderSetlistSongsList();
+        updateAutoswitchButtonUI();
+        updateSetlistNavigationUI();
+
+        initMidi();
+        updateBpmIndicator(performance.now());
+        requestWakeLock();
+        scheduleAutoHide();
+        requestAnimationFrame(tick);
+      }
+
+      hydrateUI();
+    })();
+  </script>
+</body>
+</html>
