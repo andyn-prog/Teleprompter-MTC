@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mtc-teleprompter-v1';
+const CACHE_NAME = 'mtc-teleprompter-v2';
 
 const PRECACHE_URLS = [
   '/',
@@ -13,7 +13,13 @@ const PRECACHE_URLS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(
+        PRECACHE_URLS.map((url) =>
+          cache.add(new Request(url, { cache: 'reload' })).catch(() => cache.add(url))
+        )
+      )
+    )
   );
   self.skipWaiting();
 });
@@ -26,9 +32,8 @@ self.addEventListener('activate', (event) => {
           .filter((key) => key !== CACHE_NAME)
           .map((key) => caches.delete(key))
       )
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
@@ -37,33 +42,33 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-          return response;
-        })
-        .catch(() => caches.match('/index.html'))
-    );
-    return;
-  }
-
+  // Network First per tutte le richieste: scarica prima la versione più recente da internet,
+  // aggiorna la cache e usa la cache solo se il dispositivo è offline.
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) {
-        return cached;
-      }
-      return fetch(event.request).then((response) => {
-        if (response && response.status === 200) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status >= 500) {
+          return caches.match(event.request).then((cached) => cached || networkResponse);
         }
-        return response;
-      });
-    })
+
+        if (networkResponse && networkResponse.status === 200) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
+        }
+
+        return networkResponse;
+      })
+      .catch(async () => {
+        const cachedMatch = await caches.match(event.request);
+        if (cachedMatch) return cachedMatch;
+
+        if (event.request.mode === 'navigate') {
+          return (await caches.match('/index.html')) || (await caches.match('/'));
+        }
+
+        return Response.error();
+      })
   );
 });
